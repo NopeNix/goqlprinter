@@ -14,13 +14,13 @@ import (
 // @Produce json
 // @Success 200 {array} brotherql.LabelSize
 // @Router /label-sizes [get]
-func GetLabelSizes(c *gin.Context) {
+func (h *Handlers) GetLabelSizes(c *gin.Context) {
 	labelSizes := brotherql.ListLabels()
 	c.JSON(http.StatusOK, gin.H{"label_sizes": labelSizes})
 }
 
 // GetLabelSize handles the GET /label-sizes/:id endpoint
-func GetLabelSize(c *gin.Context) {
+func (h *Handlers) GetLabelSize(c *gin.Context) {
 	id := c.Param("id")
 	label, err := brotherql.GetLabel(id)
 	if err != nil {

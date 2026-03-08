@@ -2,7 +2,7 @@ package api
 
 import (
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -38,10 +38,7 @@ type PrintPNGPayload struct {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /print_png [post]
-func PrintPNGLabel(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
-
+func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	var payload PrintPNGPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
@@ -104,7 +101,7 @@ func PrintPNGLabel(c *gin.Context) {
 	}
 
 	// Use our new USB connection helper
-	err = services.ConnectToPrinter(printer, model, func(backend brotherql.Backend, model string) error {
+	err = services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(grayImg, label)
 	})

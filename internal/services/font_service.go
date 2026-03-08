@@ -6,9 +6,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"goqlprinter/config"
 )
+
+// FontService manages font discovery and path resolution.
+type FontService struct {
+	fontDirs []string
+}
+
+// NewFontService creates a new FontService searching the given directories.
+func NewFontService(fontDirs []string) *FontService {
+	return &FontService{fontDirs: fontDirs}
+}
 
 // expandTilde expands ~ to the user's home directory
 func expandTilde(path string) string {
@@ -53,18 +61,12 @@ func findFontFiles(dir string) ([]string, error) {
 	return fontFiles, nil
 }
 
-
-// ListFonts scans the font directories and returns a list of available fonts.
-// Paths are now relative to the project root, not the working directory.
-func ListFonts() ([]string, error) {
-
-	fontDirs := config.Cfg.App.FontDirs
-
-	slog.Debug("Searching for fonts in configured directories", "dirs", fontDirs)
+// ListFonts scans configured directories and returns available font names.
+func (s *FontService) ListFonts() ([]string, error) {
+	slog.Debug("Searching for fonts in configured directories", "dirs", s.fontDirs)
 
 	var fonts []string
-	for _, dir := range fontDirs {
-		// Expand ~ to home directory
+	for _, dir := range s.fontDirs {
 		expandedDir := expandTilde(dir)
 		fontFiles, err := findFontFiles(expandedDir)
 		if err != nil {
@@ -91,16 +93,11 @@ func ListFonts() ([]string, error) {
 	return fonts, nil
 }
 
-// GetFontPath returns the absolute path to a font file given its family name.
-// Searches recursively in configured font directories.
-func GetFontPath(fontFamily string) (string, error) {
-	fontDirs := config.Cfg.App.FontDirs
+// GetFontPath returns the absolute path to a font file by family name.
+func (s *FontService) GetFontPath(fontFamily string) (string, error) {
+	slog.Debug("Searching for font in configured directories", "font", fontFamily, "dirs", s.fontDirs)
 
-	slog.Debug("Searching for font in configured directories", "font", fontFamily, "dirs", fontDirs)
-
-	// Search recursively in each font directory
-	for _, dir := range fontDirs {
-		// Expand ~ to home directory
+	for _, dir := range s.fontDirs {
 		expandedDir := expandTilde(dir)
 		var foundPath string
 		err := filepath.Walk(expandedDir, func(path string, info os.FileInfo, err error) error {
@@ -111,13 +108,12 @@ func GetFontPath(fontFamily string) (string, error) {
 				return nil
 			}
 
-			// Check if filename matches (without extension)
 			baseName := strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
 			if baseName == fontFamily {
 				ext := strings.ToLower(filepath.Ext(info.Name()))
 				if ext == ".ttf" || ext == ".otf" {
 					foundPath = path
-					return filepath.SkipAll // Found it, stop walking
+					return filepath.SkipAll
 				}
 			}
 			return nil

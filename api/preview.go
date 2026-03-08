@@ -49,7 +49,7 @@ type PreviewResponse struct {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /preview [post]
-func PreviewLabel(c *gin.Context) {
+func (h *Handlers) PreviewLabel(c *gin.Context) {
 	var req PreviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -91,7 +91,7 @@ func PreviewLabel(c *gin.Context) {
 			VerticalAlignment:   req.VerticalAlignment,
 			TextRotation:        req.TextRotation,
 		}
-		img, err = renderTextLabel(printReq, label)
+		img, err = h.renderTextLabel(printReq, label)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

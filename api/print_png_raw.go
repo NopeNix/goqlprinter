@@ -2,7 +2,7 @@ package api
 
 import (
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"bytes"
 	"fmt"
 	"image"
@@ -31,10 +31,7 @@ import (
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /print_png_raw [post]
-func PrintPNGRaw(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
-
+func (h *Handlers) PrintPNGRaw(c *gin.Context) {
 	// Parse form data
 	labelSize := c.PostForm("label_size")
 	if labelSize == "" {
@@ -106,7 +103,7 @@ func PrintPNGRaw(c *gin.Context) {
 	}
 
 	// Use our new USB connection helper
-	err = services.ConnectToPrinter(printer, model, func(backend brotherql.Backend, model string) error {
+	err = services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(grayImg, label)
 	})

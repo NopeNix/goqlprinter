@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,9 +38,7 @@ type StatusResponse struct {
 // @Failure 400 {object} map[string]string "Invalid request or printer not found"
 // @Failure 500 {object} map[string]string "Printer communication error"
 // @Router /status [post]
-func GetStatus(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
+func (h *Handlers) GetStatus(c *gin.Context) {
 	var req StatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,7 +49,7 @@ func GetStatus(c *gin.Context) {
 	statusCh := make(chan StatusResponse, 1)
 
 	// Use our new USB connection helper with custom handler for status requests
-	if err := services.ConnectToPrinter(req.Printer, "", func(backend brotherql.Backend, model string) error {
+	if err := services.ConnectToPrinter(h.Printers, req.Printer, "", func(backend brotherql.Backend, model string) error {
 		// Build status request command sequence
 		var cmdBuf []byte
 		cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...) // Invalidate buffer

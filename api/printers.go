@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"goqlprinter/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,8 +14,8 @@ import (
 // @Produce json
 // @Success 200 {array} services.FoundPrinter
 // @Router /printers [get]
-func GetPrinters(c *gin.Context) {
-	printers, err := services.FindPrinters()
+func (h *Handlers) GetPrinters(c *gin.Context) {
+	printers, err := h.Printers.FindPrinters()
 	if err != nil {
 		slog.Error("Error finding printers", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find printers"})

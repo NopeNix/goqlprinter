@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"goqlprinter/config"
-	"goqlprinter/services"
+	"goqlprinter/internal/config"
+	"goqlprinter/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,7 +21,7 @@ type ConfigResponse struct {
 // @Produce json
 // @Success 200 {object} ConfigResponse
 // @Router /config [get]
-func GetConfig(c *gin.Context) {
-	defaultPrinter := services.GetActiveDefaultPrinter()
-	c.JSON(http.StatusOK, ConfigResponse{Config: config.Cfg, DefaultPrinter: defaultPrinter})
+func (h *Handlers) GetConfig(c *gin.Context) {
+	defaultPrinter := h.Printers.GetDefaultPrinter()
+	c.JSON(http.StatusOK, ConfigResponse{Config: *h.Config, DefaultPrinter: defaultPrinter})
 }

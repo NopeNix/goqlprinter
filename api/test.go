@@ -2,7 +2,7 @@ package api
 
 import (
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -17,9 +17,7 @@ type TestRequest struct {
 	Printer string `json:"printer" binding:"required"`
 }
 
-func executeTestCommand(c *gin.Context, command []byte) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
+func (h *Handlers) executeTestCommand(c *gin.Context, command []byte) {
 	var req TestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
@@ -27,7 +25,7 @@ func executeTestCommand(c *gin.Context, command []byte) {
 	}
 
 	// Use ConnectToPrinter to handle USB connection with the Backend interface
-	err := services.ConnectToPrinter(req.Printer, "", func(backend brotherql.Backend, model string) error {
+	err := services.ConnectToPrinter(h.Printers, req.Printer, "", func(backend brotherql.Backend, model string) error {
 		// Write the test command to the printer
 		_, err := backend.Write(command)
 		if err != nil {
@@ -65,9 +63,10 @@ func executeTestCommand(c *gin.Context, command []byte) {
 		statusCode := http.StatusInternalServerError
 		errorMsg := err.Error()
 
-		if errorMsg == "printer resolution error: no printer specified and no default printer is configured or connected" {
-			statusCode = http.StatusBadRequest
-		} else if errorMsg == "unsupported printer format" || errorMsg == "invalid printer UID format" {
+		switch errorMsg {
+		case "printer resolution error: no printer specified and no default printer is configured or connected",
+			"unsupported printer format",
+			"invalid printer UID format":
 			statusCode = http.StatusBadRequest
 		}
 
@@ -88,9 +87,9 @@ func executeTestCommand(c *gin.Context, command []byte) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /test/invalidate [post]
-func TestInvalidate(c *gin.Context) {
+func (h *Handlers) TestInvalidate(c *gin.Context) {
 	command := make([]byte, 200)
-	executeTestCommand(c, command)
+	h.executeTestCommand(c, command)
 }
 
 // TestInitialize sends an initialize command to the printer.
@@ -105,9 +104,9 @@ func TestInvalidate(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /test/initialize [post]
-func TestInitialize(c *gin.Context) {
+func (h *Handlers) TestInitialize(c *gin.Context) {
 	command := []byte{0x1b, 0x40}
-	executeTestCommand(c, command)
+	h.executeTestCommand(c, command)
 }
 
 // TestFeed sends a print-and-feed command to the printer.
@@ -122,9 +121,9 @@ func TestInitialize(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /test/feed [post]
-func TestFeed(c *gin.Context) {
+func (h *Handlers) TestFeed(c *gin.Context) {
 	command := []byte{0x1a}
-	executeTestCommand(c, command)
+	h.executeTestCommand(c, command)
 }
 
 // TestSetMediaAndFeed sends a sequence to set media type and then feed.
@@ -140,7 +139,7 @@ func TestFeed(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /test/set_media_and_feed [post]
-func TestSetMediaAndFeed(c *gin.Context) {
+func (h *Handlers) TestSetMediaAndFeed(c *gin.Context) {
 	var buf bytes.Buffer
 	buf.Write(bytes.Repeat([]byte{0x00}, 200)) // Invalidate
 	buf.Write([]byte{0x1b, 0x40})              // Initialize
@@ -161,5 +160,5 @@ func TestSetMediaAndFeed(c *gin.Context) {
 	// Finally, the feed command
 	buf.Write([]byte{0x1a}) // Feed
 
-	executeTestCommand(c, buf.Bytes())
+	h.executeTestCommand(c, buf.Bytes())
 }

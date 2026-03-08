@@ -2,7 +2,7 @@ package api
 
 import (
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"fmt"
 	"image"
 	"net/http"
@@ -31,11 +31,11 @@ type PrintRequest struct {
 }
 
 // renderTextLabel creates a grayscale image from text rendering parameters
-func renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, error) {
+func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, error) {
 	padding := 10
 
 	// Resolve font path
-	fontPath, err := services.GetFontPath(req.FontFamily)
+	fontPath, err := h.Fonts.GetFontPath(req.FontFamily)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get font path: %w", err)
 	}
@@ -117,10 +117,7 @@ func renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, 
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /print [post]
-func PrintLabel(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
-
+func (h *Handlers) PrintLabel(c *gin.Context) {
 	var req PrintRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -156,7 +153,7 @@ func PrintLabel(c *gin.Context) {
 	} else {
 		// Handle text printing by calling renderTextLabel
 		var err error
-		img, err = renderTextLabel(req, label)
+		img, err = h.renderTextLabel(req, label)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -177,7 +174,7 @@ func PrintLabel(c *gin.Context) {
 	}
 
 	// Use our new USB connection helper
-	err = services.ConnectToPrinter(req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
+	err = services.ConnectToPrinter(h.Printers, req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(img, label)
 	})

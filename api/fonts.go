@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 
-	"goqlprinter/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,8 +13,8 @@ import (
 // @Produce json
 // @Success 200 {array} string
 // @Router /fonts [get]
-func GetFonts(c *gin.Context) {
-	fonts, err := services.ListFonts()
+func (h *Handlers) GetFonts(c *gin.Context) {
+	fonts, err := h.Fonts.ListFonts()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

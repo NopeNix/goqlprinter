@@ -8,7 +8,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"io/fs"
+	iofs "io/fs"
 	"log"
 	"log/slog"
 	"net/http"
@@ -17,10 +17,10 @@ import (
 
 	"goqlprinter/api"
 	"goqlprinter/brotherql"
-	"goqlprinter/config"
 	_ "goqlprinter/docs" // Swagger docs
+	icfg "goqlprinter/internal/config"
 	"goqlprinter/internal/logging"
-	"goqlprinter/services"
+	isvc "goqlprinter/internal/services"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -35,9 +35,9 @@ var embeddedFiles embed.FS
 var globalBackendProvider brotherql.BackendProvider
 
 // initializeBackendProvider selects and initializes the appropriate backend provider
-// based on the configuration setting in config.Cfg.App.Backend
-func initializeBackendProvider() brotherql.BackendProvider {
-	backend := config.Cfg.App.Backend
+// based on the configuration setting in cfg.App.Backend
+func initializeBackendProvider(cfg *icfg.Config) brotherql.BackendProvider {
+	backend := cfg.App.Backend
 	slog.Info("Initializing backend provider", "backend", backend)
 
 	switch backend {
@@ -101,42 +101,45 @@ func main() {
 	// Initialize logging first - with default level to ensure messages are shown
 	// We'll re-initialize it later with proper level from environment
 	logging.Init("INFO")
-	
+
 	// ASCII art banner - always shown
 	startupMsg := fmt.Sprintf(`
-  ____        _      __  __       _ _             
- |  _ \      | |    |  \/  |     (_) |            
- | |_) | __ _| |__  | \  / | __ _ _| | ___ _ __   
- |  _ < / _' | '_ \ | |\/| |/ _' | | |/ _ \ '_ \  
- | |_) | (_| | |_) || |  | | (_| | | |  __/ | | | 
- |____/ \__,_|_.__(_)_|  |_|\__,_|_|_|\___|_| |_| 
+  ____        _      __  __       _ _
+ |  _ \      | |    |  \/  |     (_) |
+ | |_) | __ _| |__  | \  / | __ _ _| | ___ _ __
+ |  _ < / _' | '_ \ | |\/| |/ _' | | |/ _ \ '_ \
+ | |_) | (_| | |_) || |  | | (_| | | |  __/ | | |
+ |____/ \__,_|_.__(_)_|  |_|\__,_|_|_|\___|_| |_|
 `)
 	// Print directly to stdout to ensure it's always visible
 	fmt.Println(startupMsg)
 
 	// Load configuration with verbose logging
 	slog.Info("Loading configuration...")
-	if err := config.LoadConfig(); err != nil {
+	cfg, err := icfg.LoadConfig()
+	if err != nil {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("Server configuration loaded successfully",
-		"host", config.Cfg.Server.Host,
-		"port", config.Cfg.Server.Port,
-		"backend", config.Cfg.App.Backend,
-		"default_printer", config.Cfg.App.DefaultPrinter,
-		"font_dirs", config.Cfg.App.FontDirs)
+		"host", cfg.Server.Host,
+		"port", cfg.Server.Port,
+		"backend", cfg.App.Backend,
+		"default_printer", cfg.App.DefaultPrinter,
+		"font_dirs", cfg.App.FontDirs)
 
 	// Initialize backend provider based on configuration
 	// This validates the backend choice and logs which backend will be used
-	globalBackendProvider = initializeBackendProvider()
+	globalBackendProvider = initializeBackendProvider(cfg)
 
-	// Set the default provider for printer_service.go to use
-	// This allows printer discovery to work with different backend implementations
-	services.SetDefaultProvider(globalBackendProvider)
+	// Create PrinterService and FontService using internal packages
+	ps := isvc.NewPrinterService(globalBackendProvider)
+	ps.InitializeDefaultPrinter(cfg.App.DefaultPrinter)
 
-	// Initialize default printer using the configured backend provider
-	services.InitializeDefaultPrinter(config.Cfg.App.DefaultPrinter)
+	fs := isvc.NewFontService(cfg.App.FontDirs)
+
+	// Create the API handlers with all dependencies injected
+	handlers := api.NewHandlers(ps, fs, cfg)
 
 	// Configure Gin mode first
 	if os.Getenv("GIN_MODE") == "" {
@@ -167,11 +170,11 @@ func main() {
 
 	// Initial startup logs
 	slog.Info("Logging configured successfully")
-	slog.Info("Using font directories from config", "font_dirs", config.Cfg.App.FontDirs)
+	slog.Info("Using font directories from config", "font_dirs", cfg.App.FontDirs)
 
 	// Always print the URL information
-	fmt.Printf("Brother printer driver is running. Open in browser:\nhttp://%s:%d\n", 
-		config.Cfg.Server.Host, config.Cfg.Server.Port)
+	fmt.Printf("Brother printer driver is running. Open in browser:\nhttp://%s:%d\n",
+		cfg.Server.Host, cfg.Server.Port)
 
 	// Create router with customized logging
 	r := gin.New()
@@ -199,38 +202,38 @@ func main() {
 	// API routes
 	apiRoutes := r.Group("/api")
 	{
-		apiRoutes.GET("/config", api.GetConfig) // Returns ConfigResponse
-		apiRoutes.GET("/printers", api.GetPrinters)
-		apiRoutes.GET("/label-sizes", api.GetLabelSizes)
-		apiRoutes.GET("/label-sizes/:id", api.GetLabelSize)
-		apiRoutes.POST("/print", api.PrintLabel)
-		apiRoutes.POST("/print_png", api.PrintPNGLabel)
-		apiRoutes.POST("/print_png_raw", api.PrintPNGRaw)
-		apiRoutes.POST("/print_qr", api.PrintQR)
-		apiRoutes.POST("/print_svg", api.PrintSVG)
-		apiRoutes.POST("/preview", api.PreviewLabel)
-		apiRoutes.GET("/fonts", api.GetFonts)
-		apiRoutes.POST("/status", api.GetStatus) // Returns printer status information
+		apiRoutes.GET("/config", handlers.GetConfig) // Returns ConfigResponse
+		apiRoutes.GET("/printers", handlers.GetPrinters)
+		apiRoutes.GET("/label-sizes", handlers.GetLabelSizes)
+		apiRoutes.GET("/label-sizes/:id", handlers.GetLabelSize)
+		apiRoutes.POST("/print", handlers.PrintLabel)
+		apiRoutes.POST("/print_png", handlers.PrintPNGLabel)
+		apiRoutes.POST("/print_png_raw", handlers.PrintPNGRaw)
+		apiRoutes.POST("/print_qr", handlers.PrintQR)
+		apiRoutes.POST("/print_svg", handlers.PrintSVG)
+		apiRoutes.POST("/preview", handlers.PreviewLabel)
+		apiRoutes.GET("/fonts", handlers.GetFonts)
+		apiRoutes.POST("/status", handlers.GetStatus) // Returns printer status information
 
 		testRoutes := apiRoutes.Group("/test") // Test endpoints for development
 		{
-			testRoutes.POST("/invalidate", api.TestInvalidate)
-			testRoutes.POST("/initialize", api.TestInitialize)
-			testRoutes.POST("/feed", api.TestFeed)
-			testRoutes.POST("/set_media_and_feed", api.TestSetMediaAndFeed)
+			testRoutes.POST("/invalidate", handlers.TestInvalidate)
+			testRoutes.POST("/initialize", handlers.TestInitialize)
+			testRoutes.POST("/feed", handlers.TestFeed)
+			testRoutes.POST("/set_media_and_feed", handlers.TestSetMediaAndFeed)
 		}
 	}
 
 	// Serve embedded frontend files
 
 	// 1. Create filesystem for dist directory root
-	distFS, err := fs.Sub(embeddedFiles, "frontend/dist")
+	distFS, err := iofs.Sub(embeddedFiles, "frontend/dist")
 	if err != nil {
 		log.Fatalf("Fatal error: failed to create sub filesystem for dist: %v", err)
 	}
 
 	// 2. Create separate filesystem for assets directory
-	assetsFS, err := fs.Sub(distFS, "assets")
+	assetsFS, err := iofs.Sub(distFS, "assets")
 	if err != nil {
 		log.Fatalf("Fatal error: failed to create sub filesystem for assets: %v", err)
 	}
@@ -246,7 +249,7 @@ func main() {
 	})
 
 	// Start server with config values
-	listenAddr := fmt.Sprintf("%s:%d", config.Cfg.Server.Host, config.Cfg.Server.Port)
+	listenAddr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	if err := r.Run(listenAddr); err != nil {
 		slog.Error("Failed to run server", "error", err)
 		os.Exit(1)

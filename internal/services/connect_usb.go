@@ -3,17 +3,18 @@
 package services
 
 import (
-	"goqlprinter/brotherql"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/google/gousb"
+	"goqlprinter/brotherql"
 )
 
-// ConnectToPrinter handles USB printer connection using gousb
-func ConnectToPrinter(printerIdentifier, modelOverride string, handler PrinterHandler) error {
-	resolvedPrinter, err := ResolvePrinter(printerIdentifier)
+// ConnectToPrinter handles USB printer connection using gousb.
+// It uses the PrinterService to resolve the printer identifier.
+func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride string, handler PrinterHandler) error {
+	resolvedPrinter, err := svc.ResolvePrinter(printerIdentifier)
 	if err != nil {
 		return fmt.Errorf("printer resolution error: %w", err)
 	}

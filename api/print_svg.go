@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -97,10 +97,7 @@ type PrintSVGRequest struct {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /print_svg [post]
-func PrintSVG(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
-
+func (h *Handlers) PrintSVG(c *gin.Context) {
 	var req PrintSVGRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -122,7 +119,7 @@ func PrintSVG(c *gin.Context) {
 	}
 
 	// Handle printing
-	printImageToPrinter(c, img, label, req.Printer, req.Model)
+	h.printImageToPrinter(c, img, label, req.Printer, req.Model)
 }
 
 // processSVG handles SVG conversion logic
@@ -182,7 +179,7 @@ func processSVG(req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, er
 }
 
 // printImageToPrinter handles common printing logic
-func printImageToPrinter(c *gin.Context, img *image.Gray, label brotherql.LabelSize, printer string, model string) {
+func (h *Handlers) printImageToPrinter(c *gin.Context, img *image.Gray, label brotherql.LabelSize, printer string, model string) {
 	// Handle "print to file" case separately
 	if printer == "file" {
 		timestamp := time.Now().Format("20060102150405")
@@ -197,7 +194,7 @@ func printImageToPrinter(c *gin.Context, img *image.Gray, label brotherql.LabelS
 	}
 
 	// Use our new USB connection helper
-	err := services.ConnectToPrinter(printer, model, func(backend brotherql.Backend, model string) error {
+	err := services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(img, label)
 	})

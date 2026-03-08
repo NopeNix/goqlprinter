@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"goqlprinter/brotherql"
-	"goqlprinter/services"
+	"goqlprinter/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,10 +30,7 @@ type PrintQRRequest struct {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /print_qr [post]
-func PrintQR(c *gin.Context) {
-	services.PrinterLock.Lock()
-	defer services.PrinterLock.Unlock()
-
+func (h *Handlers) PrintQR(c *gin.Context) {
 	var req PrintQRRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -57,10 +54,7 @@ func PrintQR(c *gin.Context) {
 		imageHeight = label.DotsPrintableHeight
 		drawableWidth := label.DotsPrintableWidth - 2*padding
 		drawableHeight := imageHeight - 2*padding
-		qrSize = drawableWidth
-		if drawableHeight < qrSize {
-			qrSize = drawableHeight
-		}
+		qrSize = min(drawableWidth, drawableHeight)
 	} else {
 		// For continuous tape, user wants QR code to be half of the label width.
 		// Since it's a square, height is the same as width.
@@ -97,7 +91,7 @@ func PrintQR(c *gin.Context) {
 	}
 
 	// Use our new USB connection helper
-	err = services.ConnectToPrinter(req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
+	err = services.ConnectToPrinter(h.Printers, req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(img, label)
 	})

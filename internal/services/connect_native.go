@@ -3,18 +3,20 @@
 package services
 
 import (
-	"goqlprinter/brotherql"
 	"fmt"
 	"strings"
+
+	"goqlprinter/brotherql"
 )
 
-// ConnectToPrinter handles printer connection using native OS backend
-func ConnectToPrinter(printerIdentifier, modelOverride string, handler PrinterHandler) error {
-	if defaultProvider == nil {
+// ConnectToPrinter handles printer connection using native OS backend.
+// It uses the PrinterService to resolve the printer and the embedded provider to connect.
+func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride string, handler PrinterHandler) error {
+	if svc == nil || svc.provider == nil {
 		return fmt.Errorf("no backend provider configured")
 	}
 
-	resolvedPrinter, err := ResolvePrinter(printerIdentifier)
+	resolvedPrinter, err := svc.ResolvePrinter(printerIdentifier)
 	if err != nil {
 		return fmt.Errorf("printer resolution error: %w", err)
 	}
@@ -33,15 +35,11 @@ func ConnectToPrinter(printerIdentifier, modelOverride string, handler PrinterHa
 
 	// If UID is usb:-formatted, try via native backend
 	if strings.HasPrefix(resolvedPrinter.UID, "usb:") {
-		// Native Linux uses /dev/usb/lp* paths
-		// Map usb:bus:addr -> /dev/usb/lpN
-		// Or find printer again via native provider
-		printers, err := defaultProvider.FindPrinters()
+		printers, err := svc.provider.FindPrinters()
 		if err != nil {
 			return fmt.Errorf("failed to find printers: %w", err)
 		}
 
-		// Find matching printer by model
 		found := false
 		for _, p := range printers {
 			if p.Model == resolvedPrinter.Model {
@@ -51,11 +49,11 @@ func ConnectToPrinter(printerIdentifier, modelOverride string, handler PrinterHa
 			}
 		}
 		if !found && len(printers) > 0 {
-			printerInfo = printers[0] // Use first
+			printerInfo = printers[0]
 		}
 	}
 
-	backend, err := defaultProvider.Connect(printerInfo)
+	backend, err := svc.provider.Connect(printerInfo)
 	if err != nil {
 		return fmt.Errorf("failed to connect to printer: %w", err)
 	}
