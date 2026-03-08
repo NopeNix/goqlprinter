@@ -4,6 +4,7 @@ package services
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"goqlprinter/brotherql"
@@ -57,7 +58,11 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 	if err != nil {
 		return fmt.Errorf("failed to connect to printer: %w", err)
 	}
-	defer backend.Close()
+	defer func() {
+		if cerr := backend.Close(); cerr != nil {
+			slog.Warn("failed to close backend", "error", cerr)
+		}
+	}()
 
 	modelToUse := resolvedPrinter.Model
 	if modelOverride != "" {

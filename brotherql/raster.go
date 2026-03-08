@@ -4,7 +4,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"io/ioutil"
+	"os"
 	//	"math"
 
 	"github.com/disintegration/imaging"
@@ -18,8 +18,8 @@ import (
 func CreateBlankImage(width, height int) *image.Gray {
 	img := image.NewGray(image.Rect(0, 0, width, height))
 	// Fill the image with white color
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			img.SetGray(x, y, color.Gray{Y: 255})
 		}
 	}
@@ -33,7 +33,7 @@ func DrawText(img *image.Gray, text string, fontPath string, size float64, x, y 
 		return nil
 	}
 
-	fontBytes, err := ioutil.ReadFile(fontPath)
+	fontBytes, err := os.ReadFile(fontPath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func DrawText(img *image.Gray, text string, fontPath string, size float64, x, y 
 // MeasureText measures the width and height of the rendered text.
 // Uses BoundString for accurate bounds that include glyph overhangs (important for italic/script fonts).
 func MeasureText(text string, fontPath string, size float64) (int, int, error) {
-	fontBytes, err := ioutil.ReadFile(fontPath)
+	fontBytes, err := os.ReadFile(fontPath)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -145,19 +145,13 @@ func MeasureText(text string, fontPath string, size float64) (int, int, error) {
 	// This handles fonts where glyphs extend past the advance width
 	advanceWidth := advance.Round()
 	boundsWidth := (bounds.Max.X - bounds.Min.X).Round()
-	width := advanceWidth
-	if boundsWidth > width {
-		width = boundsWidth
-	}
+	width := max(advanceWidth, boundsWidth)
 
 	// Calculate height from actual bounds
 	metrics := face.Metrics()
 	metricsHeight := (metrics.Ascent + metrics.Descent).Round()
 	boundsHeight := (bounds.Max.Y - bounds.Min.Y).Round()
-	height := metricsHeight
-	if boundsHeight > height {
-		height = boundsHeight
-	}
+	height := max(metricsHeight, boundsHeight)
 
 	return width, height, nil
 }

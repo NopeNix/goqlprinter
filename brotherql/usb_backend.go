@@ -5,6 +5,7 @@ package brotherql
 import (
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/google/gousb"
 )
@@ -30,7 +31,9 @@ func NewUSBBackend(dev *gousb.Device) (*USBBackend, error) {
 	}
 
 	// Auto-detach kernel driver (e.g. usblp) so libusb can claim the interface.
-	dev.SetAutoDetach(true)
+	if err := dev.SetAutoDetach(true); err != nil {
+		slog.Warn("failed to set auto-detach on USB device", "error", err)
+	}
 
 	// The Brother QL printers use a single configuration and interface.
 	cfg, err := dev.Config(1)
@@ -40,7 +43,9 @@ func NewUSBBackend(dev *gousb.Device) (*USBBackend, error) {
 
 	intf, err := cfg.Interface(0, 0)
 	if err != nil {
-		cfg.Close()
+		if cerr := cfg.Close(); cerr != nil {
+			slog.Warn("failed to close USB config", "error", cerr)
+		}
 		return nil, err
 	}
 
@@ -55,7 +60,9 @@ func NewUSBBackend(dev *gousb.Device) (*USBBackend, error) {
 		}
 		if err != nil {
 			intf.Close()
-			cfg.Close()
+			if cerr := cfg.Close(); cerr != nil {
+				slog.Warn("failed to close USB config", "error", cerr)
+			}
 			return nil, err
 		}
 	}
@@ -82,7 +89,9 @@ func (b *USBBackend) Read(data []byte) (int, error) {
 // Close releases the USB device.
 func (b *USBBackend) Close() error {
 	b.intf.Close()
-	b.cfg.Close()
+	if err := b.cfg.Close(); err != nil {
+		slog.Warn("failed to close USB config", "error", err)
+	}
 	// The device itself is closed by the caller that opened it, to avoid double-closing.
 	return nil
 }
@@ -123,7 +132,11 @@ var printerModels = map[string]int{
 // FindPrinters discovers all connected Brother USB printers
 func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 	ctx := gousb.NewContext()
-	defer ctx.Close()
+	defer func() {
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
+	}()
 
 	log.Printf("USB: Scanning for Brother printers (VendorID: 0x%04x)...", brotherVendorID)
 
@@ -164,7 +177,9 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 		}
 
 		// Close device immediately to release resources
-		dev.Close()
+		if err := dev.Close(); err != nil {
+			slog.Warn("failed to close USB device", "error", err)
+		}
 	}
 
 	if len(printers) == 0 {
@@ -195,21 +210,29 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 			int(desc.Address) == address
 	})
 	if err != nil {
-		ctx.Close()
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
 		return nil, fmt.Errorf("failed to open USB device: %w", err)
 	}
 
 	if len(devices) == 0 {
-		ctx.Close()
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
 		return nil, fmt.Errorf("USB device not found at bus=%d address=%d", bus, address)
 	}
 
 	if len(devices) > 1 {
 		// Close all devices
 		for _, dev := range devices {
-			dev.Close()
+			if cerr := dev.Close(); cerr != nil {
+				slog.Warn("failed to close USB device", "error", cerr)
+			}
 		}
-		ctx.Close()
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
 		return nil, fmt.Errorf("multiple devices found at bus=%d address=%d (unexpected)", bus, address)
 	}
 
@@ -219,8 +242,12 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 	// Create USBBackend using existing implementation
 	backend, err := NewUSBBackend(dev)
 	if err != nil {
-		dev.Close()
-		ctx.Close()
+		if cerr := dev.Close(); cerr != nil {
+			slog.Warn("failed to close USB device", "error", cerr)
+		}
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
 		return nil, fmt.Errorf("failed to initialize USB backend: %w", err)
 	}
 

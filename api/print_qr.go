@@ -59,7 +59,6 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		// For continuous tape, user wants QR code to be half of the label width.
 		// Since it's a square, height is the same as width.
 		qrSize = label.DotsPrintableWidth / 2
-		imageHeight = qrSize + 2*padding
 	}
 
 	if qrSize < 21 { // QR codes have a minimum size

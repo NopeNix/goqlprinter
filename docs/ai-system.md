@@ -7,9 +7,9 @@
 | `main.go` | Entry point, Gin router, backend init, embedded frontend |
 | `api/` | REST handlers (13 files): print, preview, printers, labels, fonts, config, status, test |
 | `brotherql/` | Core printer protocol, rasterization, models, platform backends |
-| `services/` | Printer discovery, font management, connection logic |
-| `config/` | Viper-based config (JSON files + env vars) |
-| `logger/` | Logging infrastructure |
+| `internal/services/` | Printer discovery, font management, connection logic |
+| `internal/config/` | Viper-based config (JSON files + env vars) |
+| `internal/logging/` | Logging infrastructure (log/slog) |
 
 ## Architecture Patterns
 

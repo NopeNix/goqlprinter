@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -52,7 +53,11 @@ func (h *Handlers) PrintPNGRaw(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open uploaded file"})
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	// Decode PNG
 	img, err := png.Decode(f)

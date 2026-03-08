@@ -294,7 +294,7 @@ func (p *BrotherQL) RequestStatus() (PrinterStatus, error) {
 	buf := make([]byte, 64)
 	maxRetries := 5
 
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		time.Sleep(100 * time.Millisecond)
 		n, readErr := p.backend.Read(buf)
 
@@ -381,15 +381,12 @@ func (p *BrotherQL) rasterize(img image.Image, bytesPerRow int, printableWidth i
 		grayImg = newGray
 	}
 
-	for y := 0; y < height; y++ {
+	for y := range height {
 		rowData := make([]byte, bytesPerRow)
 
-		loopWidth := printableWidth
-		if width < printableWidth {
-			loopWidth = width
-		}
+		loopWidth := min(width, printableWidth)
 
-		for x := 0; x < loopWidth; x++ {
+		for x := range loopWidth {
 			// --- TÄMÄ ON KRIITTINEN KORJAUS ---
 			// Emme tarkista alfakanavaa, vaan harmaasävyarvoa.
 			// Protokollan mukaan musta = 1, valkoinen = 0.
@@ -412,7 +409,11 @@ func SaveImageToFile(img image.Image, filename string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	return png.Encode(f, img)
 }
@@ -441,7 +442,7 @@ func ParseStatusResponse(data []byte) (PrinterStatus, error) {
 	errorByte1 := data[8]
 	errorByte2 := data[9]
 
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		if (errorByte1 & (1 << i)) != 0 {
 			if errMsg, ok := statusErrorInformation1[i]; ok {
 				status.Errors = append(status.Errors, errMsg)
@@ -462,13 +463,14 @@ func ParseStatusResponse(data []byte) (PrinterStatus, error) {
 		status.Error = ""
 		// Determine Ready/Busy state based on phase type
 		phaseType := data[19]
-		if phaseType == 0x00 {
+		switch phaseType {
+		case 0x00:
 			status.Ready = true
 			status.Busy = false
-		} else if phaseType == 0x01 {
+		case 0x01:
 			status.Ready = false
 			status.Busy = true
-		} else {
+		default:
 			status.Ready = true
 			status.Busy = false
 		}

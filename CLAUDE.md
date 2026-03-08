@@ -19,10 +19,11 @@ This is a Go-based backend for a Brother QL label printer web GUI. It replaces a
   - `printers.go`: Printer discovery
   - `labels.go`: Label size management
   - `fonts.go`: Font management
-- **services/**: Business logic services
+- **internal/services/**: Business logic services
   - `printer_service.go`: USB printer discovery and management
   - `font_service.go`: Font path resolution
-- **config/**: Configuration management with Viper
+- **internal/config/**: Configuration management with Viper
+- **internal/logging/**: Logging infrastructure (log/slog)
 
 ### Key Technologies
 - **Gin**: HTTP framework for REST APIs

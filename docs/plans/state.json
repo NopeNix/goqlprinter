@@ -3,274 +3,76 @@
   "created": "2026-03-08",
   "updated": "2026-03-08",
   "plan": "docs/plans/refactoring-plan.md",
-  "status": "not_started",
+  "status": "completed",
 
   "waves": [
     {
       "id": "wave-0",
       "name": "Pikakorjaukset ja suojaverkko",
-      "status": "not_started",
+      "status": "completed",
+      "commit": "4024b55",
       "tasks": [
-        {
-          "id": "0a-vet-fix",
-          "phase": "0",
-          "title": "go vet -korjaus: font_service.go:139 format-injektio",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["LSP:findReferences", "Edit"],
-          "files": ["services/font_service.go"],
-          "verify": "go vet ./..."
-        },
-        {
-          "id": "0b-interface-any",
-          "phase": "0",
-          "title": "interface{} → any koko projektissa",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["ast-grep"],
-          "files": ["**/*.go"],
-          "verify": "grep -r 'interface{}' --include='*.go' | wc -l == 0"
-        },
-        {
-          "id": "0c-recursion-fix",
-          "phase": "0",
-          "title": "Rekursiivinen initializeBackendProvider → fallthrough",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["LSP:goToDefinition", "LSP:findReferences", "Edit"],
-          "files": ["main.go"],
-          "verify": "go build ./..."
-        },
-        {
-          "id": "0d-brotherql-tests",
-          "phase": "0b",
-          "title": "brotherql/-testit nykyistä koodia vasten (suojaverkko)",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "LSP:documentSymbol"],
-          "files": [
-            "brotherql/raster_test.go",
-            "brotherql/models_test.go"
-          ],
-          "verify": "go test -race -count=1 ./brotherql/...",
-          "notes": "Table-driven testit, t.Parallel(). Testaa threshold-logiikka, PackBits, label-koot, mallidata."
-        }
-      ],
-      "commit": "fix: go vet, interface{}→any, recursion fix + brotherql tests"
+        { "id": "0a-vet-fix", "status": "completed" },
+        { "id": "0b-interface-any", "status": "completed" },
+        { "id": "0c-recursion-fix", "status": "completed" },
+        { "id": "0d-brotherql-tests", "status": "completed" }
+      ]
     },
     {
       "id": "wave-1",
       "name": "slog-migraatio",
-      "status": "not_started",
-      "depends_on": ["wave-0"],
+      "status": "completed",
+      "commit": "c1eaa8c",
       "tasks": [
-        {
-          "id": "1a-slog-init",
-          "phase": "1",
-          "title": "Luo internal/logging/logging.go + slog.SetDefault",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Write"],
-          "files": ["internal/logging/logging.go"],
-          "decision": "Vaihtoehto A: slog.SetDefault() — ei injektointia structeihin"
-        },
-        {
-          "id": "1b-replace-logger-calls",
-          "phase": "1",
-          "title": "Korvaa logger.* ja log.Printf → slog.* (ast-grep massamuutos)",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["ast-grep", "ast-code-reviewer"],
-          "files": [
-            "api/*.go",
-            "services/*.go",
-            "config/config.go",
-            "main.go",
-            "brotherql/brotherql.go"
-          ],
-          "verify": "grep -r '\"goqlprinter/logger\"' . | wc -l == 0"
-        },
-        {
-          "id": "1c-delete-logger-pkg",
-          "phase": "1",
-          "title": "Poista logger/-paketti kokonaan",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["Bash:rm"],
-          "files": ["logger/logger.go"],
-          "verify": "go build ./... && go vet ./..."
-        }
-      ],
-      "commit": "refactor: replace custom logger with log/slog"
+        { "id": "1a-slog-init", "status": "completed" },
+        { "id": "1b-replace-logger-calls", "status": "completed" },
+        { "id": "1c-delete-logger-pkg", "status": "completed" }
+      ]
     },
     {
       "id": "wave-2",
       "name": "DI-refaktorointi + internal/-rakenne",
-      "status": "not_started",
-      "depends_on": ["wave-1"],
+      "status": "completed",
+      "commit": "e152dd6",
       "tasks": [
-        {
-          "id": "2a-architecture-design",
-          "phase": "2",
-          "title": "Suunnittele struct-rakenne: PrinterService, FontService, Handlers",
-          "status": "not_started",
-          "agent": "opus",
-          "tools": ["LSP:documentSymbol", "LSP:findReferences", "LSP:goToImplementation", "ast-research-agent"],
-          "files": [],
-          "notes": "Opus analysoi nykyisen koodin, suunnittelee rajapinnat. Ei koodimuutoksia."
-        },
-        {
-          "id": "2b-internal-services",
-          "phase": "2",
-          "title": "Luo internal/services/ struct-pohjaisella DI:llä",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "LSP:findReferences", "Write", "Edit"],
-          "files": [
-            "internal/services/printer_service.go",
-            "internal/services/font_service.go",
-            "internal/services/connect_native.go",
-            "internal/services/connect_usb.go",
-            "internal/services/printer_handler.go"
-          ],
-          "notes": "Poista globaalit: PrinterLock, defaultProvider, activeDefaultPrinter"
-        },
-        {
-          "id": "2c-internal-config",
-          "phase": "2",
-          "title": "Siirrä config → internal/config, LoadConfig() palauttaa *Config",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Edit"],
-          "files": ["internal/config/config.go"],
-          "notes": "Poista globaali config.Cfg"
-        },
-        {
-          "id": "2d-api-handlers",
-          "phase": "2",
-          "title": "Refaktoroi api/ → Handlers-struct, metodit receiver-funktioiksi",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "LSP:findReferences", "ast-grep", "Edit"],
-          "files": [
-            "api/handlers.go",
-            "api/print.go",
-            "api/printers.go",
-            "api/labels.go",
-            "api/fonts.go",
-            "api/config.go",
-            "api/preview.go",
-            "api/status.go",
-            "api/test.go",
-            "api/print_png.go",
-            "api/print_png_raw.go",
-            "api/print_qr.go",
-            "api/print_svg.go"
-          ]
-        },
-        {
-          "id": "2e-main-wiring",
-          "phase": "2",
-          "title": "Kirjoita main.go wiring uusiksi (DI, ei globaaleja, ei rekursiota)",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Edit"],
-          "files": ["main.go", "backend_native_only.go", "backend_usb.go"]
-        },
-        {
-          "id": "2f-delete-old",
-          "phase": "2",
-          "title": "Poista vanhat services/ ja config/ -paketit",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["Bash:rm", "LSP:findReferences"],
-          "files": ["services/", "config/"],
-          "verify": "go build ./... && go vet ./... && go test -race ./..."
-        }
-      ],
-      "commit": "refactor: dependency injection, internal/ package structure, remove globals"
+        { "id": "2a-architecture-design", "status": "completed" },
+        { "id": "2b-internal-services", "status": "completed" },
+        { "id": "2c-internal-config", "status": "completed" },
+        { "id": "2d-api-handlers", "status": "completed" },
+        { "id": "2e-main-wiring", "status": "completed" },
+        { "id": "2f-delete-old", "status": "completed" }
+      ]
     },
     {
       "id": "wave-3",
       "name": "Kattavat testit",
-      "status": "not_started",
-      "depends_on": ["wave-2"],
+      "status": "completed",
+      "commit": "1d8d355",
       "tasks": [
-        {
-          "id": "3a-service-tests",
-          "phase": "3",
-          "title": "PrinterService + FontService testit mock-backendeillä",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Write"],
-          "files": [
-            "internal/services/printer_service_test.go",
-            "internal/services/font_service_test.go"
-          ]
-        },
-        {
-          "id": "3b-config-tests",
-          "phase": "3",
-          "title": "Config-testit: oletusarvot, env-muuttujat, tiedostopolut",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Write"],
-          "files": ["internal/config/config_test.go"]
-        },
-        {
-          "id": "3c-api-tests",
-          "phase": "3",
-          "title": "HTTP-handler-testit httptest-paketilla",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Write"],
-          "files": ["api/print_test.go", "api/printers_test.go", "api/labels_test.go"]
-        },
-        {
-          "id": "3d-protocol-tests",
-          "phase": "3",
-          "title": "brotherql/brotherql_test.go — protokollakomennot mock-backendillä",
-          "status": "not_started",
-          "agent": "sonnet",
-          "tools": ["golang-pro", "Write"],
-          "files": ["brotherql/brotherql_test.go"]
-        }
-      ],
-      "commit": "test: comprehensive test suite for services, config, api, protocol",
-      "verify": "go test -race -count=1 -coverprofile=cover.out ./... && go tool cover -func=cover.out"
+        { "id": "3a-service-tests", "status": "completed" },
+        { "id": "3b-config-tests", "status": "completed" },
+        { "id": "3c-api-tests", "status": "completed" },
+        { "id": "3d-protocol-tests", "status": "skipped", "notes": "brotherql tests written in wave-0 as safety net" }
+      ]
     },
     {
       "id": "wave-4",
       "name": "Moduulinimi (valinnainen)",
       "status": "not_started",
-      "optional": true,
-      "depends_on": ["wave-3"],
-      "tasks": [
-        {
-          "id": "4a-module-rename",
-          "phase": "4",
-          "title": "go.mod moduulinimi → github.com/<user>/goqlprinter",
-          "status": "not_started",
-          "agent": "haiku",
-          "tools": ["ast-grep", "Edit"],
-          "files": ["go.mod", "**/*.go"],
-          "verify": "go build ./... && go test -race ./..."
-        }
-      ],
-      "commit": "chore: rename module to github.com/<user>/goqlprinter"
+      "optional": true
     }
   ],
 
   "checklist": {
-    "go_vet_clean": false,
-    "go_build_all_tags": false,
-    "go_test_race": false,
-    "no_mutable_globals": false,
-    "slog_only": false,
-    "internal_packages": false,
+    "go_vet_clean": true,
+    "go_build_all_tags": true,
+    "go_test_race": true,
+    "no_mutable_globals": true,
+    "slog_only": true,
+    "internal_packages": true,
     "exported_documented": false,
-    "no_interface_brace": false,
-    "lsp_verified": false,
+    "no_interface_brace": true,
+    "lsp_verified": true,
     "ast_grep_used": false
   }
 }
