@@ -1,0 +1,86 @@
+//go:build usb
+
+package services
+
+import (
+	"goqlprinter/brotherql"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/google/gousb"
+)
+
+// ConnectToPrinter handles USB printer connection using gousb
+func ConnectToPrinter(printerIdentifier, modelOverride string, handler PrinterHandler) error {
+	resolvedPrinter, err := ResolvePrinter(printerIdentifier)
+	if err != nil {
+		return fmt.Errorf("printer resolution error: %w", err)
+	}
+
+	if resolvedPrinter.UID == "file" {
+		return fmt.Errorf("file printer cannot be connected to via USB")
+	}
+
+	if !strings.HasPrefix(resolvedPrinter.UID, "usb:") {
+		return fmt.Errorf("unsupported printer format: %s", resolvedPrinter.UID)
+	}
+
+	parts := strings.Split(resolvedPrinter.UID, ":")
+	if len(parts) != 3 {
+		return fmt.Errorf("invalid printer UID format: %s", resolvedPrinter.UID)
+	}
+
+	bus, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid bus number: %s", parts[1])
+	}
+
+	address, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return fmt.Errorf("invalid address number: %s", parts[2])
+	}
+
+	ctx := gousb.NewContext()
+	defer ctx.Close()
+
+	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
+		return desc.Bus == bus && desc.Address == address
+	})
+	if err != nil {
+		return fmt.Errorf("failed to open USB device: %w", err)
+	}
+	if len(devices) == 0 {
+		return fmt.Errorf("USB device not found: bus %d, address %d", bus, address)
+	}
+
+	dev := devices[0]
+	defer dev.Close()
+
+	for i, d := range devices {
+		if i > 0 {
+			d.Close()
+		}
+	}
+
+	if err := dev.SetAutoDetach(true); err != nil {
+		return fmt.Errorf("failed to set auto-detach: %w", err)
+	}
+
+	backend, err := brotherql.NewUSBBackend(dev)
+	if err != nil {
+		return fmt.Errorf("failed to create USB backend: %w", err)
+	}
+	defer backend.Close()
+
+	modelToUse := resolvedPrinter.Model
+	if modelOverride != "" {
+		modelToUse = modelOverride
+	}
+
+	if modelToUse == "" {
+		return fmt.Errorf("printer model not specified")
+	}
+
+	return handler(backend, modelToUse)
+}

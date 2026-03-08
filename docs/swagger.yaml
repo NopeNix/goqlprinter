@@ -1,0 +1,642 @@
+basePath: /api
+definitions:
+  api.ConfigResponse:
+    properties:
+      config:
+        $ref: '#/definitions/config.Config'
+      default_printer:
+        $ref: '#/definitions/services.FoundPrinter'
+    type: object
+  api.PrintPNGPayload:
+    description: Request body for printing PNG images
+    properties:
+      label_size:
+        type: string
+      model:
+        description: Optional
+        type: string
+      png_data:
+        type: string
+      printer:
+        description: Optional
+        type: string
+    required:
+    - label_size
+    - png_data
+    type: object
+  api.PrintQRRequest:
+    description: Request body for printing QR code labels
+    properties:
+      data:
+        type: string
+      label_size:
+        type: string
+      model:
+        description: Optional
+        type: string
+      printer:
+        description: Optional
+        type: string
+    required:
+    - data
+    - label_size
+    type: object
+  api.PrintRequest:
+    description: Request body for printing labels with text or SVG content
+    properties:
+      font_family:
+        type: string
+      font_size:
+        type: number
+      horizontal_alignment:
+        type: string
+      label_size:
+        type: string
+      model:
+        description: e.g., "QL-800" (optional)
+        type: string
+      orientation:
+        type: string
+      printer:
+        description: e.g., "QL-800", "usb:001:005" or "file" (optional)
+        type: string
+      svg_data:
+        type: string
+      svg_horizontal_alignment:
+        type: string
+      svg_scale:
+        type: number
+      svg_vertical_alignment:
+        type: string
+      text:
+        type: string
+      text_rotation:
+        type: number
+      vertical_alignment:
+        type: string
+    required:
+    - label_size
+    type: object
+  api.PrintSVGRequest:
+    description: Request body for printing SVG labels
+    properties:
+      label_size:
+        type: string
+      model:
+        description: Optional
+        type: string
+      printer:
+        description: Optional
+        type: string
+      svg_data:
+        type: string
+      svg_horizontal_alignment:
+        type: string
+      svg_scale:
+        type: number
+      svg_vertical_alignment:
+        type: string
+    required:
+    - label_size
+    - svg_data
+    type: object
+  api.StatusRequest:
+    description: Request body for getting printer status
+    properties:
+      printer:
+        description: Optional printer identifier. If empty, uses default printer.
+        example: usb:001:005
+        type: string
+    type: object
+  api.StatusResponse:
+    properties:
+      raw_bytes:
+        description: Number of raw bytes received
+        type: integer
+      raw_hex:
+        description: Full raw response in hexadecimal
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/brotherql.PrinterStatus'
+        description: Parsed status information
+    type: object
+  api.TestRequest:
+    description: Request body for test printer commands
+    properties:
+      printer:
+        type: string
+    required:
+    - printer
+    type: object
+  brotherql.LabelSize:
+    properties:
+      dots_printable_height:
+        type: integer
+      dots_printable_width:
+        type: integer
+      dots_total_height:
+        type: integer
+      dots_total_width:
+        type: integer
+      feed_margin:
+        description: Kriittinen syöttömarginaali pisteinä
+        type: integer
+      id:
+        type: string
+      is_die_cut:
+        description: Onko tarra määrämittainen?
+        type: boolean
+      name:
+        type: string
+      tape_size_height:
+        type: integer
+      tape_size_width:
+        type: integer
+    type: object
+  brotherql.PrinterStatus:
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      media_length:
+        type: integer
+      media_type:
+        type: string
+      media_width:
+        type: integer
+      model_name:
+        type: string
+      phase_type:
+        type: string
+      raw_hex:
+        type: string
+      status_type:
+        type: string
+    type: object
+  config.AppConfig:
+    properties:
+      defaultPrinter:
+        type: string
+      fontDirs:
+        items:
+          type: string
+        type: array
+    type: object
+  config.Config:
+    properties:
+      app:
+        $ref: '#/definitions/config.AppConfig'
+      server:
+        $ref: '#/definitions/config.ServerConfig'
+    type: object
+  config.ServerConfig:
+    properties:
+      host:
+        type: string
+      port:
+        type: integer
+    type: object
+  services.FoundPrinter:
+    properties:
+      id:
+        description: Unique identifier for the device
+        type: string
+      name:
+        description: E.g. "QL-800"
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API for controlling Brother QL label printers
+  title: Label Printer API
+  version: "1.0"
+paths:
+  /config:
+    get:
+      description: Returns current server configuration and default printer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ConfigResponse'
+      summary: Get server configuration
+      tags:
+      - config
+  /fonts:
+    get:
+      description: Returns list of installed fonts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+      summary: List available fonts
+      tags:
+      - fonts
+  /label-sizes:
+    get:
+      description: Returns all available label sizes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/brotherql.LabelSize'
+            type: array
+      summary: List label sizes
+      tags:
+      - labels
+  /print:
+    post:
+      consumes:
+      - application/json
+      description: Prints a label with either text or SVG content
+      parameters:
+      - description: Print request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.PrintRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Print a text or SVG label
+      tags:
+      - print
+  /print_png:
+    post:
+      consumes:
+      - application/json
+      description: Prints a label from base64 encoded PNG data
+      parameters:
+      - description: Print request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.PrintPNGPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Print from PNG data
+      tags:
+      - print
+  /print_png_raw:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Handles PNG file upload via form-data and prints it
+      parameters:
+      - description: Label size ID
+        in: formData
+        name: label_size
+        required: true
+        type: string
+      - description: PNG file to print
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Printer identifier (optional)
+        in: formData
+        name: printer
+        type: string
+      - description: Printer model override (optional)
+        in: formData
+        name: model
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Print from PNG file upload
+      tags:
+      - print
+  /print_qr:
+    post:
+      consumes:
+      - application/json
+      description: Prints a label containing a QR code with the specified data
+      parameters:
+      - description: Print request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.PrintQRRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Print QR code label
+      tags:
+      - print
+  /print_svg:
+    post:
+      consumes:
+      - application/json
+      description: Prints a label from SVG content
+      parameters:
+      - description: SVG print request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.PrintSVGRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Print SVG label
+      tags:
+      - print
+  /printers:
+    get:
+      description: Returns available printers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/services.FoundPrinter'
+            type: array
+      summary: List printers
+      tags:
+      - printers
+  /status:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Returns detailed printer status including model, media information, errors and raw response data.
+        The printer will be queried for its current state and may return multiple status packets.
+      parameters:
+      - description: Optional printer specification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.StatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.StatusResponse'
+        "400":
+          description: Invalid request or printer not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Printer communication error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get printer status information
+      tags:
+      - printer
+  /test/feed:
+    post:
+      consumes:
+      - application/json
+      description: Sends 0x1A feed command to printer
+      parameters:
+      - description: Test request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.TestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send feed command
+      tags:
+      - test
+  /test/initialize:
+    post:
+      consumes:
+      - application/json
+      description: Sends ESC @ initialize command to printer
+      parameters:
+      - description: Test request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.TestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send initialize command
+      tags:
+      - test
+  /test/invalidate:
+    post:
+      consumes:
+      - application/json
+      description: Sends 200 null bytes to clear printer buffer
+      parameters:
+      - description: Test request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.TestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send buffer invalidate command
+      tags:
+      - test
+  /test/set_media_and_feed:
+    post:
+      consumes:
+      - application/json
+      description: Sends sequence to set media type and feed
+      parameters:
+      - description: Test request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.TestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Test media setting and feed
+      tags:
+      - test
+swagger: "2.0"

@@ -1,0 +1,966 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API for controlling Brother QL label printers",
+        "title": "Label Printer API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/api",
+    "paths": {
+        "/config": {
+            "get": {
+                "description": "Returns current server configuration and default printer",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config"
+                ],
+                "summary": "Get server configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.ConfigResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/fonts": {
+            "get": {
+                "description": "Returns list of installed fonts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fonts"
+                ],
+                "summary": "List available fonts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/label-sizes": {
+            "get": {
+                "description": "Returns all available label sizes",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "labels"
+                ],
+                "summary": "List label sizes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/brotherql.LabelSize"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/print": {
+            "post": {
+                "description": "Prints a label with either text or SVG content",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "print"
+                ],
+                "summary": "Print a text or SVG label",
+                "parameters": [
+                    {
+                        "description": "Print request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.PrintRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/print_png": {
+            "post": {
+                "description": "Prints a label from base64 encoded PNG data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "print"
+                ],
+                "summary": "Print from PNG data",
+                "parameters": [
+                    {
+                        "description": "Print request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.PrintPNGPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/print_png_raw": {
+            "post": {
+                "description": "Handles PNG file upload via form-data and prints it",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "print"
+                ],
+                "summary": "Print from PNG file upload",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Label size ID",
+                        "name": "label_size",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "PNG file to print",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Printer identifier (optional)",
+                        "name": "printer",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Printer model override (optional)",
+                        "name": "model",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/print_qr": {
+            "post": {
+                "description": "Prints a label containing a QR code with the specified data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "print"
+                ],
+                "summary": "Print QR code label",
+                "parameters": [
+                    {
+                        "description": "Print request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.PrintQRRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/print_svg": {
+            "post": {
+                "description": "Prints a label from SVG content",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "print"
+                ],
+                "summary": "Print SVG label",
+                "parameters": [
+                    {
+                        "description": "SVG print request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.PrintSVGRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/printers": {
+            "get": {
+                "description": "Returns available printers",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "printers"
+                ],
+                "summary": "List printers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/services.FoundPrinter"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/status": {
+            "post": {
+                "description": "Returns detailed printer status including model, media information, errors and raw response data.\nThe printer will be queried for its current state and may return multiple status packets.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "printer"
+                ],
+                "summary": "Get printer status information",
+                "parameters": [
+                    {
+                        "description": "Optional printer specification",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.StatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or printer not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Printer communication error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/test/feed": {
+            "post": {
+                "description": "Sends 0x1A feed command to printer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "test"
+                ],
+                "summary": "Send feed command",
+                "parameters": [
+                    {
+                        "description": "Test request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.TestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/test/initialize": {
+            "post": {
+                "description": "Sends ESC @ initialize command to printer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "test"
+                ],
+                "summary": "Send initialize command",
+                "parameters": [
+                    {
+                        "description": "Test request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.TestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/test/invalidate": {
+            "post": {
+                "description": "Sends 200 null bytes to clear printer buffer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "test"
+                ],
+                "summary": "Send buffer invalidate command",
+                "parameters": [
+                    {
+                        "description": "Test request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.TestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/test/set_media_and_feed": {
+            "post": {
+                "description": "Sends sequence to set media type and feed",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "test"
+                ],
+                "summary": "Test media setting and feed",
+                "parameters": [
+                    {
+                        "description": "Test request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.TestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "api.ConfigResponse": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "$ref": "#/definitions/config.Config"
+                },
+                "default_printer": {
+                    "$ref": "#/definitions/services.FoundPrinter"
+                }
+            }
+        },
+        "api.PrintPNGPayload": {
+            "description": "Request body for printing PNG images",
+            "type": "object",
+            "required": [
+                "label_size",
+                "png_data"
+            ],
+            "properties": {
+                "label_size": {
+                    "type": "string"
+                },
+                "model": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "png_data": {
+                    "type": "string"
+                },
+                "printer": {
+                    "description": "Optional",
+                    "type": "string"
+                }
+            }
+        },
+        "api.PrintQRRequest": {
+            "description": "Request body for printing QR code labels",
+            "type": "object",
+            "required": [
+                "data",
+                "label_size"
+            ],
+            "properties": {
+                "data": {
+                    "type": "string"
+                },
+                "label_size": {
+                    "type": "string"
+                },
+                "model": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "printer": {
+                    "description": "Optional",
+                    "type": "string"
+                }
+            }
+        },
+        "api.PrintRequest": {
+            "description": "Request body for printing labels with text or SVG content",
+            "type": "object",
+            "required": [
+                "label_size"
+            ],
+            "properties": {
+                "font_family": {
+                    "type": "string"
+                },
+                "font_size": {
+                    "type": "number"
+                },
+                "horizontal_alignment": {
+                    "type": "string"
+                },
+                "label_size": {
+                    "type": "string"
+                },
+                "model": {
+                    "description": "e.g., \"QL-800\" (optional)",
+                    "type": "string"
+                },
+                "orientation": {
+                    "type": "string"
+                },
+                "printer": {
+                    "description": "e.g., \"QL-800\", \"usb:001:005\" or \"file\" (optional)",
+                    "type": "string"
+                },
+                "svg_data": {
+                    "type": "string"
+                },
+                "svg_horizontal_alignment": {
+                    "type": "string"
+                },
+                "svg_scale": {
+                    "type": "number"
+                },
+                "svg_vertical_alignment": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "text_rotation": {
+                    "type": "number"
+                },
+                "vertical_alignment": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.PrintSVGRequest": {
+            "description": "Request body for printing SVG labels",
+            "type": "object",
+            "required": [
+                "label_size",
+                "svg_data"
+            ],
+            "properties": {
+                "label_size": {
+                    "type": "string"
+                },
+                "model": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "printer": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "svg_data": {
+                    "type": "string"
+                },
+                "svg_horizontal_alignment": {
+                    "type": "string"
+                },
+                "svg_scale": {
+                    "type": "number"
+                },
+                "svg_vertical_alignment": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.StatusRequest": {
+            "description": "Request body for getting printer status",
+            "type": "object",
+            "properties": {
+                "printer": {
+                    "description": "Optional printer identifier. If empty, uses default printer.",
+                    "type": "string",
+                    "example": "usb:001:005"
+                }
+            }
+        },
+        "api.StatusResponse": {
+            "type": "object",
+            "properties": {
+                "raw_bytes": {
+                    "description": "Number of raw bytes received",
+                    "type": "integer"
+                },
+                "raw_hex": {
+                    "description": "Full raw response in hexadecimal",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Parsed status information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/brotherql.PrinterStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "api.TestRequest": {
+            "description": "Request body for test printer commands",
+            "type": "object",
+            "required": [
+                "printer"
+            ],
+            "properties": {
+                "printer": {
+                    "type": "string"
+                }
+            }
+        },
+        "brotherql.LabelSize": {
+            "type": "object",
+            "properties": {
+                "dots_printable_height": {
+                    "type": "integer"
+                },
+                "dots_printable_width": {
+                    "type": "integer"
+                },
+                "dots_total_height": {
+                    "type": "integer"
+                },
+                "dots_total_width": {
+                    "type": "integer"
+                },
+                "feed_margin": {
+                    "description": "Kriittinen syöttömarginaali pisteinä",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_die_cut": {
+                    "description": "Onko tarra määrämittainen?",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tape_size_height": {
+                    "type": "integer"
+                },
+                "tape_size_width": {
+                    "type": "integer"
+                }
+            }
+        },
+        "brotherql.PrinterStatus": {
+            "type": "object",
+            "properties": {
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "media_length": {
+                    "type": "integer"
+                },
+                "media_type": {
+                    "type": "string"
+                },
+                "media_width": {
+                    "type": "integer"
+                },
+                "model_name": {
+                    "type": "string"
+                },
+                "phase_type": {
+                    "type": "string"
+                },
+                "raw_hex": {
+                    "type": "string"
+                },
+                "status_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "config.AppConfig": {
+            "type": "object",
+            "properties": {
+                "defaultPrinter": {
+                    "type": "string"
+                },
+                "fontDirs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "config.Config": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "$ref": "#/definitions/config.AppConfig"
+                },
+                "server": {
+                    "$ref": "#/definitions/config.ServerConfig"
+                }
+            }
+        },
+        "config.ServerConfig": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.FoundPrinter": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "Unique identifier for the device",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "E.g. \"QL-800\"",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

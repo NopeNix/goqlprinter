@@ -1,0 +1,14 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "localhost"
+  },
+  "app": {
+    "backend": "auto",
+    "default_printer": "",
+    "font_dirs": [
+      "./fonts",
+      "/usr/share/fonts/truetype"
+    ]
+  }
+}
