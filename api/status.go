@@ -1,13 +1,14 @@
 package api
 
 import (
-	"goqlprinter/brotherql"
-	"goqlprinter/services"
 	"bytes"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"goqlprinter/brotherql"
+	"goqlprinter/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -95,17 +96,11 @@ func GetStatus(c *gin.Context) {
 		}
 
 		// Log status to console
-		log.Printf("--- Printer Status Report ---")
-		log.Printf("Ready: %v, Busy: %v", status.Ready, status.Busy)
-		log.Printf("Media Type: %s, Width: %dmm",
-			status.MediaType, status.MediaWidth)
-		if status.Error != "" {
-			log.Printf("Error: %s", status.Error)
-		} else {
-			log.Println("Error: None")
-		}
-		log.Printf("Raw data (%d bytes): %x", len(allData), allData)
-		log.Printf("-----------------------------")
+		slog.Info("Printer Status Report",
+			"ready", status.Ready, "busy", status.Busy,
+			"media_type", status.MediaType, "media_width_mm", status.MediaWidth,
+			"error", status.Error,
+			"raw_bytes", len(allData), "raw_hex", fmt.Sprintf("%x", allData))
 
 		// Send status via channel
 		statusCh <- StatusResponse{

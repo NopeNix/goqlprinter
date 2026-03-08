@@ -3,11 +3,11 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
 	"goqlprinter/brotherql"
-	"goqlprinter/logger"
 )
 
 var (
@@ -36,7 +36,7 @@ type FoundPrinter struct {
 // operations. If not set, FindPrinters() and related functions will return an error.
 func SetDefaultProvider(provider brotherql.BackendProvider) {
 	defaultProvider = provider
-	logger.Info("Default backend provider set: %T", provider)
+	slog.Info("Default backend provider set", "type", fmt.Sprintf("%T", provider))
 }
 
 // FindPrinters scans for connected Brother printers using the default provider.
@@ -55,16 +55,16 @@ func FindPrinters() ([]FoundPrinter, error) {
 //
 // The returned FoundPrinter structs are converted from PrinterInfo for API compatibility.
 func FindPrintersWithProvider(provider brotherql.BackendProvider) ([]FoundPrinter, error) {
-	logger.Debug("Discovering printers using provider: %T", provider)
+	slog.Debug("Discovering printers using provider", "type", fmt.Sprintf("%T", provider))
 
 	// Use the BackendProvider to find printers
 	printerInfos, err := provider.FindPrinters()
 	if err != nil {
-		logger.Error("Provider failed to find printers: %v", err)
+		slog.Error("Provider failed to find printers", "error", err)
 		return nil, fmt.Errorf("failed to discover printers: %w", err)
 	}
 
-	logger.Info("Found %d printer(s) via provider", len(printerInfos))
+	slog.Info("Found printers via provider", "count", len(printerInfos))
 
 	// Convert PrinterInfo to FoundPrinter for backward compatibility
 	foundPrinters := make([]FoundPrinter, 0, len(printerInfos))
@@ -74,7 +74,7 @@ func FindPrintersWithProvider(provider brotherql.BackendProvider) ([]FoundPrinte
 			UID:   info.URI,   // Connection URI (e.g., "usb:003:025")
 		}
 		foundPrinters = append(foundPrinters, foundPrinter)
-		logger.Debug("  - %s at %s (backend: %s)", info.Model, info.URI, info.Backend)
+		slog.Debug("Found printer", "model", info.Model, "uri", info.URI, "backend", info.Backend)
 	}
 
 	return foundPrinters, nil
@@ -85,17 +85,17 @@ func FindPrintersWithProvider(provider brotherql.BackendProvider) ([]FoundPrinte
 // If no provider is configured, it logs a warning and returns without setting a default.
 func InitializeDefaultPrinter(configuredName string) {
 	if defaultProvider == nil {
-		logger.Warning("Cannot initialize default printer: no backend provider configured")
+		slog.Warn("Cannot initialize default printer: no backend provider configured")
 		return
 	}
 
 	printers, err := FindPrinters()
 	if err != nil {
-		logger.Error("Error finding printers during initialization: %v", err)
+		slog.Error("Error finding printers during initialization", "error", err)
 		return
 	}
 	if len(printers) == 0 {
-		logger.Warning("No Brother QL printers found.")
+		slog.Warn("No Brother QL printers found")
 		return
 	}
 
@@ -103,17 +103,17 @@ func InitializeDefaultPrinter(configuredName string) {
 	if configuredName != "" {
 		for _, p := range printers {
 			if p.Model == configuredName {
-				logger.Info("Default printer set from config: %s (%s)", p.Model, p.UID)
+				slog.Info("Default printer set from config", "model", p.Model, "uid", p.UID)
 				activeDefaultPrinter = &p
 				return
 			}
 		}
-		logger.Warning("Configured default printer '%s' not found. Falling back to first available.", configuredName)
+		slog.Warn("Configured default printer not found, falling back to first available", "configured", configuredName)
 	}
 
 	// 2. Fallback: use the first available printer
 	p := printers[0]
-	logger.Info("Default printer set to first available: %s (%s)", p.Model, p.UID)
+	slog.Info("Default printer set to first available", "model", p.Model, "uid", p.UID)
 	activeDefaultPrinter = &p
 }
 

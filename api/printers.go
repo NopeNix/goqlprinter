@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"goqlprinter/services"
@@ -18,7 +18,7 @@ import (
 func GetPrinters(c *gin.Context) {
 	printers, err := services.FindPrinters()
 	if err != nil {
-		log.Printf("Error finding printers: %v", err)
+		slog.Error("Error finding printers", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find printers"})
 		return
 	}

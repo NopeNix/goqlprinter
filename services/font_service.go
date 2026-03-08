@@ -1,12 +1,13 @@
 package services
 
 import (
-	"goqlprinter/config"
-	"goqlprinter/logger"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"goqlprinter/config"
 )
 
 // expandTilde expands ~ to the user's home directory
@@ -59,10 +60,7 @@ func ListFonts() ([]string, error) {
 
 	fontDirs := config.Cfg.App.FontDirs
 
-	logger.Debug("Searching for fonts in configured directories:")
-	for _, dir := range fontDirs {
-		logger.Debug("  - %s", dir)
-	}
+	slog.Debug("Searching for fonts in configured directories", "dirs", fontDirs)
 
 	var fonts []string
 	for _, dir := range fontDirs {
@@ -71,7 +69,7 @@ func ListFonts() ([]string, error) {
 		fontFiles, err := findFontFiles(expandedDir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				logger.Warning("Directory does not exist: %s", expandedDir)
+				slog.Warn("Font directory does not exist", "dir", expandedDir)
 				continue
 			}
 			return nil, fmt.Errorf("error reading directory %s: %w", expandedDir, err)
@@ -80,14 +78,14 @@ func ListFonts() ([]string, error) {
 		for _, fontPath := range fontFiles {
 			fontName := strings.TrimSuffix(filepath.Base(fontPath), filepath.Ext(fontPath))
 			fonts = append(fonts, fontName)
-			logger.Debug("Found font: %s at %s", fontName, fontPath)
+			slog.Debug("Found font", "name", fontName, "path", fontPath)
 		}
 	}
 
 	if len(fonts) == 0 {
-		logger.Warning("No fonts found in any of the searched directories")
+		slog.Warn("No fonts found in any of the searched directories")
 	} else {
-		logger.Info("Found %d fonts total", len(fonts))
+		slog.Info("Found fonts total", "count", len(fonts))
 	}
 
 	return fonts, nil
@@ -98,10 +96,7 @@ func ListFonts() ([]string, error) {
 func GetFontPath(fontFamily string) (string, error) {
 	fontDirs := config.Cfg.App.FontDirs
 
-	logger.Debug("Searching for font '%s' in configured directories:", fontFamily)
-	for _, dir := range fontDirs {
-		logger.Debug("  - %s", dir)
-	}
+	slog.Debug("Searching for font in configured directories", "font", fontFamily, "dirs", fontDirs)
 
 	// Search recursively in each font directory
 	for _, dir := range fontDirs {
@@ -129,11 +124,11 @@ func GetFontPath(fontFamily string) (string, error) {
 		})
 
 		if err == nil && foundPath != "" {
-			logger.Debug("Found font at: %s", foundPath)
+			slog.Debug("Found font", "path", foundPath)
 			return foundPath, nil
 		}
 	}
 
-	logger.Error("font %q not found in any searched directories", fontFamily)
+	slog.Error("font not found in any searched directories", "font", fontFamily)
 	return "", fmt.Errorf("font %q not found in any searched directories", fontFamily)
 }

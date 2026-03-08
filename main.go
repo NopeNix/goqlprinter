@@ -5,20 +5,22 @@
 package main
 
 import (
-	"goqlprinter/api"
-	"goqlprinter/brotherql"
-	_ "goqlprinter/docs" // Swagger docs
-	"goqlprinter/config"
-	"goqlprinter/logger"
-	"goqlprinter/services"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
-	"io"
 	"os"
 	"strings"
+
+	"goqlprinter/api"
+	"goqlprinter/brotherql"
+	"goqlprinter/config"
+	_ "goqlprinter/docs" // Swagger docs
+	"goqlprinter/internal/logging"
+	"goqlprinter/services"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -36,48 +38,48 @@ var globalBackendProvider brotherql.BackendProvider
 // based on the configuration setting in config.Cfg.App.Backend
 func initializeBackendProvider() brotherql.BackendProvider {
 	backend := config.Cfg.App.Backend
-	logger.Info("Initializing backend provider: %s", backend)
+	slog.Info("Initializing backend provider", "backend", backend)
 
 	switch backend {
 	case "usb":
 		// Force USB backend (gousb/libusb)
-		logger.Info("Using USB backend (gousb/libusb)")
+		slog.Info("Using USB backend (gousb/libusb)")
 		return initUSBProvider()
 
 	case "native":
 		// Force OS native backend
-		logger.Info("Using native OS backend")
+		slog.Info("Using native OS backend")
 		return createNativeProvider()
 
 	case "auto":
 		// Try USB first (supports status queries), fallback to native
-		logger.Info("Auto mode: trying USB backend first (supports status queries)")
+		slog.Info("Auto mode: trying USB backend first (supports status queries)")
 		usbProvider := initUSBProvider()
 		if usbProvider != nil {
 			printers, err := usbProvider.FindPrinters()
 			if err == nil && len(printers) > 0 {
-				logger.Info("USB backend found %d printer(s), using USB backend", len(printers))
+				slog.Info("USB backend found printers, using USB backend", "count", len(printers))
 				return usbProvider
 			}
-			logger.Info("USB backend found no printers (err=%v), trying native backend", err)
+			slog.Info("USB backend found no printers, trying native backend", "error", err)
 		} else {
-			logger.Info("USB backend not available, trying native backend")
+			slog.Info("USB backend not available, trying native backend")
 		}
 
 		// Fallback to native backend
 		nativeProvider := createNativeProvider()
 		printers, err := nativeProvider.FindPrinters()
 		if err == nil && len(printers) > 0 {
-			logger.Info("Native backend found %d printer(s), using native backend", len(printers))
-			logger.Warning("Note: Native backend does not support printer status queries")
+			slog.Info("Native backend found printers, using native backend", "count", len(printers))
+			slog.Warn("Note: Native backend does not support printer status queries")
 			return nativeProvider
 		}
 
-		logger.Warning("No printers found with any backend")
+		slog.Warn("No printers found with any backend")
 		return nativeProvider // Return native as fallback even if empty
 
 	default:
-		logger.Warning("Unknown backend '%s', falling back to auto mode", backend)
+		slog.Warn("Unknown backend, falling back to auto mode", "backend", backend)
 		usbProvider := initUSBProvider()
 		if usbProvider != nil {
 			printers, err := usbProvider.FindPrinters()
@@ -98,7 +100,7 @@ func createNativeProvider() brotherql.BackendProvider {
 func main() {
 	// Initialize logging first - with default level to ensure messages are shown
 	// We'll re-initialize it later with proper level from environment
-	logger.Init("INFO")
+	logging.Init("INFO")
 	
 	// ASCII art banner - always shown
 	startupMsg := fmt.Sprintf(`
@@ -113,17 +115,17 @@ func main() {
 	fmt.Println(startupMsg)
 
 	// Load configuration with verbose logging
-	logger.Info("Loading configuration...")
+	slog.Info("Loading configuration...")
 	if err := config.LoadConfig(); err != nil {
-		logger.Error("Failed to load configuration: %v", err)
+		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("Server configuration loaded successfully:")
-	logger.Info("- Host: %s", config.Cfg.Server.Host)
-	logger.Info("- Port: %d", config.Cfg.Server.Port)
-	logger.Info("- Backend: %s", config.Cfg.App.Backend)
-	logger.Info("- Default Printer: %s", config.Cfg.App.DefaultPrinter)
-	logger.Info("- Font directories: %v", config.Cfg.App.FontDirs)
+	slog.Info("Server configuration loaded successfully",
+		"host", config.Cfg.Server.Host,
+		"port", config.Cfg.Server.Port,
+		"backend", config.Cfg.App.Backend,
+		"default_printer", config.Cfg.App.DefaultPrinter,
+		"font_dirs", config.Cfg.App.FontDirs)
 
 	// Initialize backend provider based on configuration
 	// This validates the backend choice and logs which backend will be used
@@ -146,27 +148,26 @@ func main() {
 
 	// Re-initialize logging with proper level from environment
 	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" && gin.Mode() == gin.ReleaseMode {
-		logLevel = "ERROR" // Default to ERROR level in release mode
+	if logLevel == "" {
+		logLevel = "ERROR"
 	}
-	logger.Init(logLevel)
+	logging.Init(logLevel)
 
 	// Configure Gin logging
-	switch logger.GetLevel() {
-	case logger.DEBUG:
+	if strings.ToUpper(logLevel) == "DEBUG" {
 		gin.DefaultWriter = os.Stdout
 		gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
-			logger.Debug("%-6s %-25s --> %s (%d handlers)", httpMethod, absolutePath, handlerName, nuHandlers)
+			slog.Debug("route registered", "method", httpMethod, "path", absolutePath, "handler", handlerName)
 		}
-	case logger.INFO, logger.WARNING:
-		gin.DefaultWriter = os.Stdout
-	case logger.ERROR:
+	} else if strings.ToUpper(logLevel) == "ERROR" {
 		gin.DefaultWriter = io.Discard
+	} else {
+		gin.DefaultWriter = os.Stdout
 	}
 
 	// Initial startup logs
-	logger.Info("Logging configured successfully")
-	logger.Info("Using font directories from config: %v", config.Cfg.App.FontDirs)
+	slog.Info("Logging configured successfully")
+	slog.Info("Using font directories from config", "font_dirs", config.Cfg.App.FontDirs)
 
 	// Always print the URL information
 	fmt.Printf("Brother printer driver is running. Open in browser:\nhttp://%s:%d\n", 
@@ -247,7 +248,7 @@ func main() {
 	// Start server with config values
 	listenAddr := fmt.Sprintf("%s:%d", config.Cfg.Server.Host, config.Cfg.Server.Port)
 	if err := r.Run(listenAddr); err != nil {
-		logger.Error("Failed to run server: %v", err)
+		slog.Error("Failed to run server", "error", err)
 		os.Exit(1)
 	}
 }

@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -58,7 +58,7 @@ func getDefaultFontDirs() []string {
 // LoadConfig reads configuration and stores it in Cfg with priority:
 // default -> config file -> environment variables -> API parameters
 func LoadConfig() error {
-	log.Println("Loading configuration with priority order: default -> config file -> environment variables -> API parameters")
+	slog.Info("Loading configuration with priority order: default -> config file -> environment variables -> API parameters")
 	
 	// Search for config in multiple locations
 	viper.AddConfigPath("/etc/labelprinter/")
@@ -84,12 +84,12 @@ func LoadConfig() error {
 	// Try to read config file (higher priority than defaults but lower than env vars)
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Printf("No config file found, using defaults")
+			slog.Info("No config file found, using defaults")
 		} else {
 			return fmt.Errorf("error reading config file: %w", err)
 		}
 	} else {
-		log.Printf("Using config file: %s", viper.ConfigFileUsed())
+		slog.Info("Using config file", "path", viper.ConfigFileUsed())
 	}
 
 	if err := viper.Unmarshal(&Cfg); err != nil {
@@ -105,12 +105,12 @@ func logConfigSources() {
 		return
 	}
 
-	log.Printf("Configuration loaded with the following values:")
+	slog.Info("Configuration loaded with the following values:")
 	logConfigValue("server.port", fmt.Sprintf("%d", Cfg.Server.Port))
 	logConfigValue("server.host", Cfg.Server.Host)
 	logConfigValue("app.backend", Cfg.App.Backend)
 	logConfigValue("app.default_printer", Cfg.App.DefaultPrinter)
-	log.Printf("  - app.font_dirs: %v", Cfg.App.FontDirs)
+	slog.Info("Configuration value", "key", "app.font_dirs", "value", Cfg.App.FontDirs)
 }
 
 func logConfigValue(key string, value string) {
@@ -126,5 +126,5 @@ func logConfigValue(key string, value string) {
 		source = fmt.Sprintf("environment (%s)", envKey)
 	}
 	
-	log.Printf("  - %s: %s (from %s)", key, value, source)
+	slog.Info("Configuration value", "key", key, "value", value, "source", source)
 }

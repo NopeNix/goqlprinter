@@ -1,13 +1,13 @@
 package brotherql
 
 import (
-	"goqlprinter/logger"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -86,21 +86,21 @@ func flipImageHorizontally(src image.Image) image.Image {
 
 // Print sends an image to the printer following the Brother protocol exactly.
 func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
-	logger.Debug("=== Starting Print Function ===")
-	logger.Debug("Printer model: %s", p.model)
-	logger.Debug("Label: %s (width=%dmm, height=%dmm)", label.Name, label.TapeSizeWidth, label.TapeSizeHeight)
+	slog.Debug("=== Starting Print Function ===")
+	slog.Debug("Printer model", "model", p.model)
+	slog.Debug("Label", "name", label.Name, "width_mm", label.TapeSizeWidth, "height_mm", label.TapeSizeHeight)
 
 	model, err := GetModel(p.model)
 	if err != nil {
 		// Even though GetModel returns defaults, log the error
-		logger.Warning("Model warning: %v", err)
+		slog.Warn("Model warning", "error", err)
 	}
 
 	var buf bytes.Buffer
 	bounds := img.Bounds()
 	height := bounds.Max.Y
 
-	logger.Debug("Image dimensions: %dx%d pixels", bounds.Dx(), bounds.Dy())
+	slog.Debug("Image dimensions", "width", bounds.Dx(), "height", bounds.Dy())
 
 	// --- Phase 0: Reset printer and drain stale responses ---
 	// Send invalidate + initialize first as a separate write to clear any
@@ -122,7 +122,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	discardBuf := make([]byte, 64)
 	n, _ := p.backend.Read(discardBuf)
 	if n > 0 {
-		logger.Debug("Discarded %d stale bytes from printer after reset", n)
+		slog.Debug("Discarded stale bytes from printer after reset", "n", n)
 	}
 	// Restore default timeout for subsequent reads
 	if lb, ok := p.backend.(*LinuxBackend); ok {
@@ -143,7 +143,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	// 3. Jatketaan tämän uuden, oikean levyisen kuvan käsittelyä.
 
 	rasterWidthPixels := model.RasterWidthBytes * 8
-	logger.Debug("Raster width: %d bytes (%d pixels)", model.RasterWidthBytes, rasterWidthPixels)
+	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
 
 	fullWidthImg := CreateBlankImage(rasterWidthPixels, height) // Luo valkoisen pohjan
 
@@ -160,7 +160,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	// Rasteroidaan uusi, oikean levyinen kuva. Annetaan rasteroijalle leveydeksi
 	// myös tämä uusi, täysi leveys pikseleinä.
 	rasterData := p.rasterize(flippedImg, model.RasterWidthBytes, rasterWidthPixels)
-	logger.Debug("Rasterized %d rows of data", len(rasterData))
+	slog.Debug("Rasterized rows of data", "rows", len(rasterData))
 
 	// --- COMMAND STREAM BUILDING FOLLOWING PROTOCOL ---
 	// Note: Invalidate + Initialize already sent in Phase 0 above.
@@ -192,16 +192,16 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	if isDieCut {
 		payload[1] = 0x0B // Die-cut
 		payload[3] = byte(label.TapeSizeHeight)
-		logger.Debug("Media type: Die-cut (0x0B), width=%dmm, height=%dmm", label.TapeSizeWidth, label.TapeSizeHeight)
+		slog.Debug("Media type: Die-cut (0x0B)", "width_mm", label.TapeSizeWidth, "height_mm", label.TapeSizeHeight)
 	} else {
 		payload[1] = 0x0A // Continuous
 		payload[3] = 0    // CRITICAL: Length must be 0 for continuous tape
-		logger.Debug("Media type: Continuous (0x0A), width=%dmm", label.TapeSizeWidth)
+		slog.Debug("Media type: Continuous (0x0A)", "width_mm", label.TapeSizeWidth)
 	}
 	payload[2] = byte(label.TapeSizeWidth)
 
 	binary.LittleEndian.PutUint32(payload[4:8], uint32(height)) // Image height in pixels
-	logger.Debug("Print height: %d pixels", height)
+	slog.Debug("Print height", "pixels", height)
 	buf.Write(payload)
 
 	// 5. Set Margins - CRITICAL FIX
@@ -210,7 +210,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	marginPayload := make([]byte, 2)
 	binary.LittleEndian.PutUint16(marginPayload, uint16(label.FeedMargin))
 	buf.Write(marginPayload)
-	logger.Debug("Feed margin: %d dots", label.FeedMargin)
+	slog.Debug("Feed margin", "dots", label.FeedMargin)
 
 	// 6. Set Auto-Cut and Expanded Mode
 	// Send commands as the working Python reference does:
@@ -252,26 +252,26 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 
 	// Send entire command stream to printer
 	totalBytes := buf.Len()
-	logger.Debug("Sending %d bytes to printer", totalBytes)
+	slog.Debug("Sending bytes to printer", "total_bytes", totalBytes)
 	_, err = p.backend.Write(buf.Bytes())
 	if err != nil {
-		logger.Error("Failed to write to printer: %v", err)
+		slog.Error("Failed to write to printer", "error", err)
 		return err
 	}
-	logger.Debug("Print command sent successfully")
+	slog.Debug("Print command sent successfully")
 
 	// Request status from printer
 	status, err := p.RequestStatus()
 	if err != nil {
-		logger.Warning("Failed to read printer status: %v", err)
+		slog.Warn("Failed to read printer status", "error", err)
 	} else {
-		logger.Debug("Printer Ready: %v, Busy: %v, Error: %s", status.Ready, status.Busy, status.Error)
-		logger.Debug("Media: %s, Width: %dmm", status.MediaType, status.MediaWidth)
+		slog.Debug("Printer status", "ready", status.Ready, "busy", status.Busy, "error", status.Error)
+		slog.Debug("Media info", "type", status.MediaType, "width_mm", status.MediaWidth)
 		if status.Error != "" {
-			logger.Error("PRINTER ERROR: %s", status.Error)
+			slog.Error("PRINTER ERROR", "error", status.Error)
 			return fmt.Errorf("printer reported error: %s", status.Error)
 		}
-		logger.Debug("No printer errors reported")
+		slog.Debug("No printer errors reported")
 	}
 
 	return nil
@@ -301,17 +301,17 @@ func (p *BrotherQL) RequestStatus() (PrinterStatus, error) {
 		if n > 0 {
 			allData = append(allData, buf[:n]...)
 			if len(allData) >= 32 {
-				logger.Debug("Status read successful on attempt %d/%d: got %d bytes", i+1, maxRetries, len(allData))
+				slog.Debug("Status read successful", "attempt", i+1, "max", maxRetries, "bytes", len(allData))
 				break
 			}
 		}
 
 		if readErr != nil {
-			logger.Debug("Status read attempt %d/%d failed: %v", i+1, maxRetries, readErr)
+			slog.Debug("Status read attempt failed", "attempt", i+1, "max", maxRetries, "error", readErr)
 			continue
 		}
 
-		logger.Debug("Status read attempt %d/%d: got %d bytes total, expected 32", i+1, maxRetries, len(allData))
+		slog.Debug("Status read attempt", "attempt", i+1, "max", maxRetries, "bytes_total", len(allData), "expected", 32)
 	}
 
 	if len(allData) < 32 {
@@ -490,8 +490,10 @@ func ParseStatusResponse(data []byte) (PrinterStatus, error) {
 		status.PhaseType = pt
 	}
 
-	logger.Debug("Parsed status - Model: %s, Ready: %v, Busy: %v, Errors: %v, MediaType: %s, MediaWidth: %d, MediaLength: %d",
-		status.ModelName, status.Ready, status.Busy, status.Errors, status.MediaType, status.MediaWidth, status.MediaLength)
+	slog.Debug("Parsed status",
+		"model", status.ModelName, "ready", status.Ready, "busy", status.Busy,
+		"errors", status.Errors, "media_type", status.MediaType,
+		"media_width", status.MediaWidth, "media_length", status.MediaLength)
 
 	return status, nil
 }
