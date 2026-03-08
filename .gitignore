@@ -7,6 +7,9 @@ qlprinter.exe
 # Build output
 dist/
 
+# Build dependencies (libusb ym. — ladataan scripts/ kautta)
+build_deps/
+
 # Frontend
 frontend/node_modules/
 frontend/.serena/

@@ -116,8 +116,11 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 
 	// Read and discard any stale response (non-fatal if nothing to read).
 	// If the backend supports configurable timeout, use a short one for draining.
-	if lb, ok := p.backend.(*LinuxBackend); ok {
-		lb.readTimeout = 300 * time.Millisecond
+	type ReadTimeoutSetter interface {
+		SetReadTimeout(d time.Duration)
+	}
+	if ts, ok := p.backend.(ReadTimeoutSetter); ok {
+		ts.SetReadTimeout(300 * time.Millisecond)
 	}
 	discardBuf := make([]byte, 64)
 	n, _ := p.backend.Read(discardBuf)
@@ -125,8 +128,8 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 		slog.Debug("Discarded stale bytes from printer after reset", "n", n)
 	}
 	// Restore default timeout for subsequent reads
-	if lb, ok := p.backend.(*LinuxBackend); ok {
-		lb.readTimeout = 3 * time.Second
+	if ts, ok := p.backend.(ReadTimeoutSetter); ok {
+		ts.SetReadTimeout(3 * time.Second)
 	}
 
 	// --- KORJAUS KUVAN VENYMISEEN JA MUSTAAN RAITAAN ---

@@ -20,6 +20,11 @@ type LinuxBackend struct {
 	readTimeout time.Duration // configurable read timeout, default 3s
 }
 
+// SetReadTimeout implements ReadTimeoutSetter for drain optimisation.
+func (b *LinuxBackend) SetReadTimeout(d time.Duration) {
+	b.readTimeout = d
+}
+
 // Write sends data to the printer device
 func (b *LinuxBackend) Write(data []byte) (int, error) {
 	if b.file == nil {
