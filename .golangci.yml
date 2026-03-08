@@ -1,0 +1,51 @@
+version: "2"
+
+formatters:
+  enable:
+    - goimports   # gofmt + import-järjestys
+
+  settings:
+    goimports:
+      local-prefixes:
+        - goqlprinter
+
+linters:
+  default: none
+  enable:
+    # Correctness
+    - errcheck       # unhandled errors
+    - govet          # go vet checks
+    - staticcheck    # static analysis (SA*, S*, QF*)
+    - unused         # unused code
+
+    # Style & idioms
+    - misspell       # typos in comments/strings
+    - unconvert      # unnecessary type conversions
+    - predeclared    # shadowing built-ins
+
+    # Bugs
+    - bodyclose      # HTTP response body not closed
+    - noctx          # HTTP requests without context
+    - copyloopvar    # loop variable capture
+    - intrange       # prefer range over int (Go 1.22+)
+
+    # Security
+    - gosec
+
+  settings:
+    gosec:
+      excludes:
+        - G304  # File path from variable — debug-output käyttää tarkoituksella
+        - G115  # Integer overflow conversion — protokollakoodi, intentionaaliset byte-konversiot
+
+    misspell:
+      ignore-rules:
+        - marginaali  # suomenkielinen sana kommentissa
+
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - errcheck
+          - gosec
+          - noctx  # httptest.NewRequest ilman kontekstia on normaalia testeissä

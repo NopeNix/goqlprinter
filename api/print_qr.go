@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"goqlprinter/brotherql"
 	"goqlprinter/internal/services"
-	"github.com/gin-gonic/gin"
 )
 
 // PrintQRRequest defines the structure for printing QR codes
@@ -37,46 +38,40 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		return
 	}
 
-	// 1. Get label info
 	label, err := brotherql.GetLabel(req.LabelSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid label size"})
 		return
 	}
 
-	// 2. Calculate image and QR code dimensions
 	padding := 10
 	var imageHeight int
 	var qrSize int
 
 	if label.DotsPrintableHeight > 0 {
-		// For die-cut labels, fit the QR code within the printable area.
+		// Die-cut: fit the QR code within the printable area.
 		imageHeight = label.DotsPrintableHeight
 		drawableWidth := label.DotsPrintableWidth - 2*padding
 		drawableHeight := imageHeight - 2*padding
 		qrSize = min(drawableWidth, drawableHeight)
 	} else {
-		// For continuous tape, user wants QR code to be half of the label width.
-		// Since it's a square, height is the same as width.
+		// Continuous tape: use half the label width (QR is square).
 		qrSize = label.DotsPrintableWidth / 2
 	}
 
-	if qrSize < 21 { // QR codes have a minimum size
+	if qrSize < 21 { // minimum valid QR code size
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Label too small to print a QR code"})
 		return
 	}
 
-	// 3. Create image just large enough for QR code with padding
 	img := brotherql.CreateBlankImage(qrSize+2*padding, qrSize+2*padding)
 
-	// Draw QR code centered in the image
 	err = brotherql.DrawQRCode(img, req.Data, padding, padding, qrSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to draw QR code: %v", err)})
 		return
 	}
 
-	// Handle "print to file" case separately
 	if req.Printer == "file" {
 		timestamp := time.Now().Format("20060102150405")
 		filename := fmt.Sprintf("debug_output/label_qr_%s.png", timestamp)
@@ -89,7 +84,6 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		return
 	}
 
-	// Use our new USB connection helper
 	err = services.ConnectToPrinter(h.Printers, req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(img, label)

@@ -8,8 +8,7 @@ import (
 	"goqlprinter/brotherql"
 )
 
-// initUSBProvider is not available in native-only builds
-// This stub ensures compilation works but returns native provider instead
+// initUSBProvider is unavailable in native-only builds; falls back to the native provider.
 func initUSBProvider() brotherql.BackendProvider {
 	slog.Warn("USB backend requested but not available in this build, using native backend instead")
 	return createNativeProvider()

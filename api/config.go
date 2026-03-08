@@ -3,9 +3,10 @@ package api
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"goqlprinter/internal/config"
 	"goqlprinter/internal/services"
-	"github.com/gin-gonic/gin"
 )
 
 // ConfigResponse defines the structure for the /config endpoint response

@@ -45,29 +45,23 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 		return
 	}
 
-	// Create a channel to receive the status response
 	statusCh := make(chan StatusResponse, 1)
 
-	// Use our new USB connection helper with custom handler for status requests
 	if err := services.ConnectToPrinter(h.Printers, req.Printer, "", func(backend brotherql.Backend, model string) error {
-		// Build status request command sequence
 		var cmdBuf []byte
-		cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...) // Invalidate buffer
-		cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)                   // Status Information Request (ESC i S)
+		cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...) // invalidate buffer
+		cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)                   // ESC i S: status request
 
-		// Send command to printer
 		if _, err := backend.Write(cmdBuf); err != nil {
 			return fmt.Errorf("failed to send status request: %w", err)
 		}
 
-		// Wait for printer to respond
 		time.Sleep(100 * time.Millisecond)
 
-		// Read all available responses (printer may send multiple status packets)
 		var allData []byte
 		tmpBuf := make([]byte, 64)
 
-		// Read with timeout - try multiple times if needed
+		// Accumulate data until we have the 32-byte status response or time out.
 		timeout := time.Now().Add(150 * time.Millisecond)
 		for time.Now().Before(timeout) {
 			n, readErr := backend.Read(tmpBuf)
@@ -87,20 +81,17 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 			return fmt.Errorf("no response from printer")
 		}
 
-		// Parse the first 32 bytes for status
 		status, parseErr := brotherql.ParseStatusResponse(allData[:32])
 		if parseErr != nil {
 			return fmt.Errorf("failed to parse status response: %w", parseErr)
 		}
 
-		// Log status to console
 		slog.Info("Printer Status Report",
 			"ready", status.Ready, "busy", status.Busy,
 			"media_type", status.MediaType, "media_width_mm", status.MediaWidth,
 			"error", status.Error,
 			"raw_bytes", len(allData), "raw_hex", fmt.Sprintf("%x", allData))
 
-		// Send status via channel
 		statusCh <- StatusResponse{
 			Status:   status,
 			RawHex:   fmt.Sprintf("%x", allData),
@@ -113,7 +104,6 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 		return
 	}
 
-	// Wait for status response with timeout
 	select {
 	case status := <-statusCh:
 		c.JSON(http.StatusOK, status)

@@ -5,27 +5,26 @@ import (
 	"fmt"
 )
 
-// PrinterModel sisältää mallikohtaiset ominaisuudet protokollan mukaisesti.
-// Nämä tiedot ovat kriittisiä oikean komentojonon luomiseksi.
+// PrinterModel holds model-specific protocol parameters.
 type PrinterModel struct {
 	Name                string
-	SupportsSwitchMode  bool // Tukeeko malli ESC i a -komentoa? (Rasteritilaan vaihto)
-	SupportsCompression bool // Tukeeko malli M-komentoa? (PackBits-pakkaus)
-	NeedsQualitySetting bool // Vaatiiko malli tulostuslaadun (300x300dpi) asettamista?
-	RasterWidthBytes    int  // Rasteririvin kiinteä leveys tavuina.
-	InvalidateBytes     int  // Montako nollatavua lähetetään alussa puskurin tyhjentämiseksi.
+	SupportsSwitchMode  bool // whether the model supports ESC i a (switch to raster mode)
+	SupportsCompression bool // whether the model supports PackBits compression (M command)
+	NeedsQualitySetting bool // whether the model requires the 300x300 dpi quality flag
+	RasterWidthBytes    int  // fixed raster row width in bytes
+	InvalidateBytes     int  // number of null bytes sent at startup to clear the buffer
 }
 
-// GetModel palauttaa määritellyn tulostinmallin tiedot.
-// Jos mallia ei löydy, se palauttaa modernin oletusmallin (QL-800) ja virheilmoituksen.
+// GetModel returns the protocol parameters for the named printer model.
+// If the model is not recognised, it returns QL-800 defaults and a non-nil error.
 func GetModel(name string) (PrinterModel, error) {
 	models := map[string]PrinterModel{
-		// --- QL-5xx Sarja (Vanhemmat mallit, EI TUE rasteritilaan vaihtoa) ---
+		// QL-5xx series: older models, no raster mode switch support.
 		"QL-500": {
 			Name:                "QL-500",
 			SupportsSwitchMode:  false,
 			SupportsCompression: false,
-			NeedsQualitySetting: false, // Vanha malli, ei vaadi tätä
+			NeedsQualitySetting: false,
 			RasterWidthBytes:    90,
 			InvalidateBytes:     200,
 		},
@@ -53,14 +52,14 @@ func GetModel(name string) (PrinterModel, error) {
 		},
 		"QL-580N": {
 			Name:                "QL-580N",
-			SupportsSwitchMode:  true, // Uudempi verkkolaite
+			SupportsSwitchMode:  true,
 			SupportsCompression: true,
 			NeedsQualitySetting: true,
 			RasterWidthBytes:    90,
 			InvalidateBytes:     400,
 		},
 
-		// --- QL-6xx Sarja ---
+		// QL-6xx series.
 		"QL-650TD": {
 			Name:                "QL-650TD",
 			SupportsSwitchMode:  true,
@@ -70,7 +69,7 @@ func GetModel(name string) (PrinterModel, error) {
 			InvalidateBytes:     400,
 		},
 
-		// --- QL-7xx Sarja (Tukee rasteritilaan vaihtoa, ei yleensä pakkausta) ---
+		// QL-7xx series: raster mode switch supported; most lack compression.
 		"QL-700": {
 			Name:                "QL-700",
 			SupportsSwitchMode:  true,
@@ -82,7 +81,7 @@ func GetModel(name string) (PrinterModel, error) {
 		"QL-710W": {
 			Name:                "QL-710W",
 			SupportsSwitchMode:  true,
-			SupportsCompression: true, // Verkkolaite tukee yleensä
+			SupportsCompression: true,
 			NeedsQualitySetting: true,
 			RasterWidthBytes:    90,
 			InvalidateBytes:     400,
@@ -96,7 +95,7 @@ func GetModel(name string) (PrinterModel, error) {
 			InvalidateBytes:     400,
 		},
 
-		// --- QL-8xx Sarja (Modernit, tukevat rasteritilaan vaihtoa) ---
+		// QL-8xx series: modern models, full raster mode support.
 		"QL-800": {
 			Name:                "QL-800",
 			SupportsSwitchMode:  true,
@@ -108,7 +107,7 @@ func GetModel(name string) (PrinterModel, error) {
 		"QL-810W": {
 			Name:                "QL-810W",
 			SupportsSwitchMode:  true,
-			SupportsCompression: true, // Verkkolaite tukee yleensä
+			SupportsCompression: true,
 			NeedsQualitySetting: true,
 			RasterWidthBytes:    90,
 			InvalidateBytes:     400,
@@ -122,7 +121,7 @@ func GetModel(name string) (PrinterModel, error) {
 			InvalidateBytes:     400,
 		},
 
-		// --- QL-1xxx Sarja (Laajakuvamallit, 162 tavua/rivi) ---
+		// QL-1xxx series: wide-format models, 162 bytes per raster row.
 		"QL-1050": {
 			Name:                "QL-1050",
 			SupportsSwitchMode:  true,
@@ -159,12 +158,10 @@ func GetModel(name string) (PrinterModel, error) {
 	if model, ok := models[name]; ok {
 		return model, nil
 	}
-	// Oletusarvo tuntemattomalle mallille (moderni oletus)
 	return models["QL-800"], fmt.Errorf("printer model '%s' not explicitly defined, using defaults for QL-800", name)
 }
 
-// LabelSize edustaa tarran kokoa ja ominaisuuksia.
-// Rakenne on päivitetty sisältämään FeedMargin ja IsDieCut.
+// LabelSize describes a supported label format.
 type LabelSize struct {
 	ID                  string `json:"id"`
 	Name                string `json:"name"`
@@ -174,17 +171,17 @@ type LabelSize struct {
 	DotsPrintableHeight int    `json:"dots_printable_height"`
 	TapeSizeWidth       int    `json:"tape_size_width"`
 	TapeSizeHeight      int    `json:"tape_size_height"`
-	FeedMargin          int    `json:"feed_margin"` // Kriittinen syöttömarginaali pisteinä
-	IsDieCut            bool   `json:"is_die_cut"`  // Onko tarra määrämittainen?
+	FeedMargin          int    `json:"feed_margin"` // feed margin in dots required by the protocol
+	IsDieCut            bool   `json:"is_die_cut"`
 	MediaCode           []byte `json:"-"`
 }
 
-// ListLabels palauttaa listan saatavilla olevista tarroista päivitetyillä tiedoilla.
-// FeedMargin-arvot on korjattu vastaamaan toimivaa Python-referenssiajuria.
-// Yleissääntö: 0 useimmille määrämittaisille tarroille, 35 (tai 14) jatkuvalle nauhalle.
+// ListLabels returns all supported label sizes.
+// FeedMargin values follow the reference Python driver: 0 for most die-cut labels,
+// 35 (or 14) for continuous tape.
 func ListLabels() []LabelSize {
 	return []LabelSize{
-		// --- Jatkuva nauha (Endless) ---
+		// Continuous tape (endless)
 		{ID: "12", Name: "12mm endless", DotsTotalWidth: 142, DotsPrintableWidth: 106, TapeSizeWidth: 12, FeedMargin: 35, IsDieCut: false},
 		{ID: "18", Name: "18mm endless", DotsTotalWidth: 256, DotsPrintableWidth: 234, TapeSizeWidth: 18, FeedMargin: 14, IsDieCut: false},
 		{ID: "29", Name: "29mm endless", DotsTotalWidth: 342, DotsPrintableWidth: 306, TapeSizeWidth: 29, FeedMargin: 35, IsDieCut: false},
@@ -196,7 +193,7 @@ func ListLabels() []LabelSize {
 		{ID: "102", Name: "102mm endless", DotsTotalWidth: 1200, DotsPrintableWidth: 1164, TapeSizeWidth: 102, FeedMargin: 35, IsDieCut: false},
 		{ID: "103", Name: "104mm endless", DotsTotalWidth: 1224, DotsPrintableWidth: 1200, TapeSizeWidth: 104, FeedMargin: 35, IsDieCut: false},
 
-		// --- Määrämittaiset tarrat (Die-cut) - Useimmiten FeedMargin on 0 ---
+		// Die-cut labels (FeedMargin is 0 for most)
 		{ID: "17x54", Name: "17mm x 54mm die-cut", DotsTotalWidth: 201, DotsTotalHeight: 636, DotsPrintableWidth: 165, DotsPrintableHeight: 566, TapeSizeWidth: 17, TapeSizeHeight: 54, FeedMargin: 0, IsDieCut: true},
 		{ID: "17x87", Name: "17mm x 87mm die-cut", DotsTotalWidth: 201, DotsTotalHeight: 1026, DotsPrintableWidth: 165, DotsPrintableHeight: 956, TapeSizeWidth: 17, TapeSizeHeight: 87, FeedMargin: 0, IsDieCut: true},
 		{ID: "23x23", Name: "23mm x 23mm die-cut", DotsTotalWidth: 272, DotsTotalHeight: 272, DotsPrintableWidth: 202, DotsPrintableHeight: 202, TapeSizeWidth: 23, TapeSizeHeight: 23, FeedMargin: 0, IsDieCut: true},
@@ -213,14 +210,14 @@ func ListLabels() []LabelSize {
 		{ID: "102x152", Name: "102mm x 153mm die-cut", DotsTotalWidth: 1200, DotsTotalHeight: 1804, DotsPrintableWidth: 1164, DotsPrintableHeight: 1660, TapeSizeWidth: 102, TapeSizeHeight: 153, FeedMargin: 0, IsDieCut: true},
 		{ID: "103x164", Name: "104mm x 164mm die-cut", DotsTotalWidth: 1224, DotsTotalHeight: 1941, DotsPrintableWidth: 1200, DotsPrintableHeight: 1822, TapeSizeWidth: 104, TapeSizeHeight: 164, FeedMargin: 0, IsDieCut: true},
 
-		// --- Pyöreät tarrat (Round Die-cut) - Jotkin vaativat marginaalin ---
+		// Round die-cut labels
 		{ID: "d12", Name: "12mm round die-cut", DotsTotalWidth: 142, DotsTotalHeight: 142, DotsPrintableWidth: 94, DotsPrintableHeight: 94, TapeSizeWidth: 12, TapeSizeHeight: 12, FeedMargin: 35, IsDieCut: true},
 		{ID: "d24", Name: "24mm round die-cut", DotsTotalWidth: 284, DotsTotalHeight: 284, DotsPrintableWidth: 236, DotsPrintableHeight: 236, TapeSizeWidth: 24, TapeSizeHeight: 24, FeedMargin: 0, IsDieCut: true},
 		{ID: "d58", Name: "58mm round die-cut", DotsTotalWidth: 688, DotsTotalHeight: 688, DotsPrintableWidth: 618, DotsPrintableHeight: 618, TapeSizeWidth: 58, TapeSizeHeight: 58, FeedMargin: 0, IsDieCut: true},
 	}
 }
 
-// GetLabel palauttaa tarran sen ID:n perusteella.
+// GetLabel returns the label size with the given ID.
 func GetLabel(id string) (LabelSize, error) {
 	for _, label := range ListLabels() {
 		if label.ID == id {

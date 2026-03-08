@@ -37,7 +37,6 @@ type PreviewResponse struct {
 	PrintableHeight int    `json:"printable_height"` // Printable area height
 }
 
-// PreviewLabel handles POST /api/preview
 // PreviewLabel godoc
 // @Summary Preview a label without printing
 // @Description Renders a label preview and returns it as a base64-encoded PNG
@@ -56,7 +55,6 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 		return
 	}
 
-	// Get label info
 	label, err := brotherql.GetLabel(req.LabelSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid label size"})
@@ -66,7 +64,6 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 	var img *image.Gray
 
 	if req.SVGData != "" {
-		// Use SVG rendering
 		svgReq := PrintSVGRequest{
 			LabelSize:              req.LabelSize,
 			SVGData:                req.SVGData,
@@ -74,13 +71,12 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			SVGHorizontalAlignment: req.SVGHorizontalAlignment,
 			SVGVerticalAlignment:   req.SVGVerticalAlignment,
 		}
-		img, err = processSVG(svgReq, label)
+		img, err = processSVG(c.Request.Context(), svgReq, label)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	} else {
-		// Use text rendering - convert PreviewRequest to PrintRequest
 		printReq := PrintRequest{
 			Text:                req.Text,
 			LabelSize:           req.LabelSize,
@@ -98,14 +94,12 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 		}
 	}
 
-	// Encode to PNG
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode image"})
 		return
 	}
 
-	// Create base64 data URL
 	base64Img := base64.StdEncoding.EncodeToString(buf.Bytes())
 	dataURL := "data:image/png;base64," + base64Img
 

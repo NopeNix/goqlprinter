@@ -1,12 +1,13 @@
 package api
 
 import (
-	"goqlprinter/brotherql"
-	"goqlprinter/internal/services"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net/http"
+
+	"goqlprinter/brotherql"
+	"goqlprinter/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,15 +25,12 @@ func (h *Handlers) executeTestCommand(c *gin.Context, command []byte) {
 		return
 	}
 
-	// Use ConnectToPrinter to handle USB connection with the Backend interface
 	err := services.ConnectToPrinter(h.Printers, req.Printer, "", func(backend brotherql.Backend, model string) error {
-		// Write the test command to the printer
 		_, err := backend.Write(command)
 		if err != nil {
 			return fmt.Errorf("failed to write to printer: %w", err)
 		}
 
-		// Attempt to read the 32-byte status response from the printer.
 		readBuffer := make([]byte, 32)
 		n, readErr := backend.Read(readBuffer)
 
@@ -42,7 +40,6 @@ func (h *Handlers) executeTestCommand(c *gin.Context, command []byte) {
 		}
 
 		if readErr != nil {
-			// Even on error (like a timeout), we might have read some data.
 			response["read_error"] = readErr.Error()
 		}
 
@@ -59,7 +56,6 @@ func (h *Handlers) executeTestCommand(c *gin.Context, command []byte) {
 	})
 
 	if err != nil {
-		// Determine appropriate HTTP status code based on error type
 		statusCode := http.StatusInternalServerError
 		errorMsg := err.Error()
 
@@ -75,7 +71,6 @@ func (h *Handlers) executeTestCommand(c *gin.Context, command []byte) {
 	}
 }
 
-// TestInvalidate sends 200 null bytes to clear the printer's buffer.
 // TestInvalidate godoc
 // @Summary Send buffer invalidate command
 // @Description Sends 200 null bytes to clear printer buffer
@@ -92,7 +87,6 @@ func (h *Handlers) TestInvalidate(c *gin.Context) {
 	h.executeTestCommand(c, command)
 }
 
-// TestInitialize sends an initialize command to the printer.
 // TestInitialize godoc
 // @Summary Send initialize command
 // @Description Sends ESC @ initialize command to printer
@@ -109,7 +103,6 @@ func (h *Handlers) TestInitialize(c *gin.Context) {
 	h.executeTestCommand(c, command)
 }
 
-// TestFeed sends a print-and-feed command to the printer.
 // TestFeed godoc
 // @Summary Send feed command
 // @Description Sends 0x1A feed command to printer
@@ -126,8 +119,6 @@ func (h *Handlers) TestFeed(c *gin.Context) {
 	h.executeTestCommand(c, command)
 }
 
-// TestSetMediaAndFeed sends a sequence to set media type and then feed.
-// This helps diagnose if the printer needs media context before acting.
 // TestSetMediaAndFeed godoc
 // @Summary Test media setting and feed
 // @Description Sends sequence to set media type and feed
@@ -141,24 +132,23 @@ func (h *Handlers) TestFeed(c *gin.Context) {
 // @Router /test/set_media_and_feed [post]
 func (h *Handlers) TestSetMediaAndFeed(c *gin.Context) {
 	var buf bytes.Buffer
-	buf.Write(bytes.Repeat([]byte{0x00}, 200)) // Invalidate
-	buf.Write([]byte{0x1b, 0x40})              // Initialize
-	buf.Write([]byte{0x1b, 0x69, 0x61, 0x01})  // Select ESC/P mode
+	buf.Write(bytes.Repeat([]byte{0x00}, 200)) // invalidate
+	buf.Write([]byte{0x1b, 0x40})              // ESC @: initialize
+	buf.Write([]byte{0x1b, 0x69, 0x61, 0x01})  // ESC i a: select raster mode
 
-	// Set Media & Quality for 62mm x 29mm die-cut tape, which is installed.
-	mediaCmd := []byte{0x1b, 0x69, 0x7a} // ESC i z
+	// ESC i z: set media and quality (62mm x 29mm die-cut as test fixture)
+	mediaCmd := []byte{0x1b, 0x69, 0x7a}
 	payload := make([]byte, 10)
 	var validFlags byte = 0x80 | 0x40 | 0x08 | 0x04 | 0x02 // 0xCE
 	payload[0] = validFlags
-	payload[1] = 0x0B                                        // Media Type: Die-cut
-	payload[2] = 62                                          // Media Width (mm)
-	payload[3] = 29                                          // Media Height (mm)
-	binary.LittleEndian.PutUint32(payload[4:8], uint32(271)) // raster lines (271 for 62x29)
+	payload[1] = 0x0B                                        // media type: die-cut
+	payload[2] = 62                                          // media width (mm)
+	payload[3] = 29                                          // media height (mm)
+	binary.LittleEndian.PutUint32(payload[4:8], uint32(271)) // raster lines for 62x29
 	buf.Write(mediaCmd)
 	buf.Write(payload)
 
-	// Finally, the feed command
-	buf.Write([]byte{0x1a}) // Feed
+	buf.Write([]byte{0x1a}) // 0x1A: print and feed
 
 	h.executeTestCommand(c, buf.Bytes())
 }

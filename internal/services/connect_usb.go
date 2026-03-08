@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/gousb"
+
 	"goqlprinter/brotherql"
 )
 

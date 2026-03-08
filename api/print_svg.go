@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/draw"
@@ -10,9 +11,10 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"goqlprinter/brotherql"
 	"goqlprinter/internal/services"
-	"github.com/gin-gonic/gin"
 )
 
 // SVGPrintParams defines the parameters for SVG printing
@@ -24,27 +26,19 @@ type SVGPrintParams struct {
 	SVGVerticalAlignment   string  `json:"svg_vertical_alignment"`   // "start", "center", or "end" (default "center")
 }
 
-// @name SVGPrintAlignment
-// @enum SVG alignment options
 const (
 	SVGAlignStart  = "start"
 	SVGAlignCenter = "center"
 	SVGAlignEnd    = "end"
 )
 
-// rasterizeSVG converts SVG to PNG image
-// @param svg The SVG content to rasterize
-// @param widthPx The target width in pixels (0 for auto)
-// @param heightPx The target height in pixels (0 for auto)
-// @param scale Scaling factor to apply
-// @return image.Image The rasterized image
-// @return error Any error that occurred
-
-func rasterizeSVG(svg string, widthPx, heightPx int, scale float64) (image.Image, error) {
+// rasterizeSVG converts SVG content to a PNG image using rsvg-convert.
+// widthPx and heightPx set the target dimensions (0 means auto). scale is applied to both.
+func rasterizeSVG(ctx context.Context, svg string, widthPx, heightPx int, scale float64) (image.Image, error) {
 	args := []string{
 		"--format", "png",
 		"--background-color", "white",
-		"--keep-aspect-ratio", // Always keep aspect ratio to prevent distortion.
+		"--keep-aspect-ratio",
 	}
 
 	if widthPx > 0 {
@@ -56,12 +50,12 @@ func rasterizeSVG(svg string, widthPx, heightPx int, scale float64) (image.Image
 		args = append(args, "--height", fmt.Sprintf("%d", scaledHeight))
 	}
 
-	cmd := exec.Command("rsvg-convert", args...)
+	cmd := exec.CommandContext(ctx, "rsvg-convert", args...)
 	cmd.Stdin = bytes.NewBufferString(svg)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("SVG rasterization failed: %w. Varmista, että 'rsvg-convert' on asennettu ja PATH-ympäristömuuttujassa", err)
+		return nil, fmt.Errorf("SVG rasterization failed (ensure rsvg-convert is installed and in PATH): %w", err)
 	}
 	return png.Decode(&out)
 }
@@ -73,7 +67,6 @@ func convertToGrayscale(img image.Image) *image.Gray {
 	return gray
 }
 
-// processSVG handles SVG conversion logic
 // PrintSVGRequest defines the structure for SVG printing
 // @description Request body for printing SVG labels
 type PrintSVGRequest struct {
@@ -104,26 +97,23 @@ func (h *Handlers) PrintSVG(c *gin.Context) {
 		return
 	}
 
-	// Get label info
 	label, err := brotherql.GetLabel(req.LabelSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid label size"})
 		return
 	}
 
-	// Convert SVG to printable image
-	img, err := processSVG(req, label)
+	img, err := processSVG(c.Request.Context(), req, label)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Handle printing
 	h.printImageToPrinter(c, img, label, req.Printer, req.Model)
 }
 
 // processSVG handles SVG conversion logic
-func processSVG(req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, error) {
+func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, error) {
 	scale := req.SVGScale
 	if scale <= 0 {
 		scale = 1.0
@@ -133,11 +123,11 @@ func processSVG(req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, er
 	var err error
 	var imageHeight int
 
-	if label.DotsPrintableHeight > 0 { // Die-cut label
+	if label.DotsPrintableHeight > 0 { // die-cut: fixed height
 		imageHeight = label.DotsPrintableHeight
-		svgImg, err = rasterizeSVG(req.SVGData, label.DotsPrintableWidth, imageHeight, scale)
-	} else { // Continuous tape
-		svgImg, err = rasterizeSVG(req.SVGData, label.DotsPrintableWidth, 0, scale)
+		svgImg, err = rasterizeSVG(ctx, req.SVGData, label.DotsPrintableWidth, imageHeight, scale)
+	} else { // continuous tape: derive height from rendered SVG
+		svgImg, err = rasterizeSVG(ctx, req.SVGData, label.DotsPrintableWidth, 0, scale)
 		if err == nil {
 			imageHeight = svgImg.Bounds().Dy()
 		}
@@ -178,9 +168,9 @@ func processSVG(req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, er
 	return img, nil
 }
 
-// printImageToPrinter handles common printing logic
+// printImageToPrinter sends img to the printer identified by printer/model,
+// or saves it to a debug file when printer == "file".
 func (h *Handlers) printImageToPrinter(c *gin.Context, img *image.Gray, label brotherql.LabelSize, printer string, model string) {
-	// Handle "print to file" case separately
 	if printer == "file" {
 		timestamp := time.Now().Format("20060102150405")
 		filename := fmt.Sprintf("debug_output/label_svg_%s.png", timestamp)
@@ -193,7 +183,6 @@ func (h *Handlers) printImageToPrinter(c *gin.Context, img *image.Gray, label br
 		return
 	}
 
-	// Use our new USB connection helper
 	err := services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(img, label)

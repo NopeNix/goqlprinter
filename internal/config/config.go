@@ -54,34 +54,30 @@ func getDefaultFontDirs() []string {
 }
 
 // LoadConfig loads configuration from files and environment variables.
-// Returns a new Config — does NOT store in a global variable.
+// Priority order: defaults → config file → environment variables.
 func LoadConfig() (*Config, error) {
 	slog.Info("Loading configuration with priority order: default -> config file -> environment variables -> API parameters")
 
 	v := viper.New()
 
-	// Search for config in multiple locations
 	v.AddConfigPath("/etc/labelprinter/")
 	v.AddConfigPath("$HOME/.labelprinter")
 	v.AddConfigPath("./config")
 	v.AddConfigPath(".")
 
-	v.SetConfigName("config") // Looks for config.json, config.yaml etc
+	v.SetConfigName("config") // looks for config.json, config.yaml, etc.
 	v.SetConfigType("json")
 
-	// Set defaults first (lowest priority)
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.host", "localhost")
 	v.SetDefault("app.font_dirs", getDefaultFontDirs())
 	v.SetDefault("app.default_printer", "")
 	v.SetDefault("app.backend", "auto")
 
-	// Configure environment variables (middle priority)
 	v.SetEnvPrefix("LABELPRINTER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	// Try to read config file (higher priority than defaults but lower than env vars)
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			slog.Info("No config file found, using defaults")
@@ -121,7 +117,6 @@ func logConfigValue(v *viper.Viper, key string, value string) {
 		source = fmt.Sprintf("config file (%s)", v.ConfigFileUsed())
 	}
 
-	// Check corresponding environment variable
 	envKey := "LABELPRINTER_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 	if _, exists := os.LookupEnv(envKey); exists {
 		source = fmt.Sprintf("environment (%s)", envKey)

@@ -3,8 +3,9 @@ package api
 import (
 	"net/http"
 
-	"goqlprinter/brotherql"
 	"github.com/gin-gonic/gin"
+
+	"goqlprinter/brotherql"
 )
 
 // GetLabelSizes godoc
@@ -19,7 +20,7 @@ func (h *Handlers) GetLabelSizes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"label_sizes": labelSizes})
 }
 
-// GetLabelSize handles the GET /label-sizes/:id endpoint
+// GetLabelSize returns the label size with the given ID.
 func (h *Handlers) GetLabelSize(c *gin.Context) {
 	id := c.Param("id")
 	label, err := brotherql.GetLabel(id)

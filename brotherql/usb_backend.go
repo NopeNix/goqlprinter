@@ -22,20 +22,16 @@ type USBBackend struct {
 
 // NewUSBBackend creates a new USBBackend instance.
 func NewUSBBackend(dev *gousb.Device) (*USBBackend, error) {
-	// The dev.Reset() call is omitted as it can be unreliable, especially on Windows.
-
-	// Log available configurations for debugging. Brother printers should have 1.
 	log.Printf("Info: USB device has %d configuration(s).", len(dev.Desc.Configs))
 	for _, cfgDesc := range dev.Desc.Configs {
 		log.Printf("  - Configuration #%d", cfgDesc.Number)
 	}
 
-	// Auto-detach kernel driver (e.g. usblp) so libusb can claim the interface.
+	// Auto-detach the kernel usblp driver so libusb can claim the interface.
 	if err := dev.SetAutoDetach(true); err != nil {
 		slog.Warn("failed to set auto-detach on USB device", "error", err)
 	}
 
-	// The Brother QL printers use a single configuration and interface.
 	cfg, err := dev.Config(1)
 	if err != nil {
 		return nil, err
@@ -49,7 +45,6 @@ func NewUSBBackend(dev *gousb.Device) (*USBBackend, error) {
 		return nil, err
 	}
 
-	// Find the IN and OUT endpoints.
 	var inEndpoint *gousb.InEndpoint
 	var outEndpoint *gousb.OutEndpoint
 	for _, desc := range intf.Setting.Endpoints {
@@ -86,30 +81,28 @@ func (b *USBBackend) Read(data []byte) (int, error) {
 	return b.inEndpoint.Read(data)
 }
 
-// Close releases the USB device.
+// Close releases the USB interface and configuration.
+// The underlying device is closed by the caller to avoid double-closing.
 func (b *USBBackend) Close() error {
 	b.intf.Close()
 	if err := b.cfg.Close(); err != nil {
 		slog.Warn("failed to close USB config", "error", err)
 	}
-	// The device itself is closed by the caller that opened it, to avoid double-closing.
 	return nil
 }
 
-// USBProvider implements BackendProvider for USB printer discovery and connection
-type USBProvider struct {
-	// No state needed - stateless provider
-}
+// USBProvider implements BackendProvider for USB printer discovery and connection.
+type USBProvider struct{}
 
-// NewUSBProvider creates a new USBProvider instance
+// NewUSBProvider creates a new USBProvider instance.
 func NewUSBProvider() *USBProvider {
 	return &USBProvider{}
 }
 
-// brotherVendorID is the USB vendor ID for Brother Industries
+// brotherVendorID is the USB vendor ID for Brother Industries.
 const brotherVendorID = 0x04f9
 
-// printerModels maps model names to product IDs (from services/printer_service.go)
+// printerModels maps known Brother QL model names to their USB product IDs.
 var printerModels = map[string]int{
 	"QL-500":     0x2015,
 	"QL-550":     0x2016,
@@ -129,7 +122,7 @@ var printerModels = map[string]int{
 	"QL-1110NWB": 0x20b0,
 }
 
-// FindPrinters discovers all connected Brother USB printers
+// FindPrinters discovers all connected Brother USB printers.
 func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 	ctx := gousb.NewContext()
 	defer func() {
@@ -140,7 +133,6 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 
 	log.Printf("USB: Scanning for Brother printers (VendorID: 0x%04x)...", brotherVendorID)
 
-	// Open all Brother USB devices
 	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		return desc.Vendor == brotherVendorID
 	})
@@ -153,30 +145,26 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 
 	var printers []PrinterInfo
 
-	// Match devices to known printer models
 	for _, dev := range devices {
 		productID := int(dev.Desc.Product)
 
-		// Find matching model name
 		for modelName, modelProductID := range printerModels {
 			if productID == modelProductID {
-				// Create URI in format "usb:bus:address" (e.g., "usb:003:025")
 				uri := fmt.Sprintf("usb:%03d:%03d", dev.Desc.Bus, dev.Desc.Address)
 
 				printer := PrinterInfo{
-					Name:    fmt.Sprintf("%s (USB)", modelName), // Display name
-					Model:   modelName,                          // Model identifier
-					URI:     uri,                                // Connection identifier
-					Backend: BackendUSB,                         // Backend type
+					Name:    fmt.Sprintf("%s (USB)", modelName),
+					Model:   modelName,
+					URI:     uri,
+					Backend: BackendUSB,
 				}
 
 				printers = append(printers, printer)
 				log.Printf("USB: Found %s at %s", modelName, uri)
-				break // Only one model per product ID
+				break
 			}
 		}
 
-		// Close device immediately to release resources
 		if err := dev.Close(); err != nil {
 			slog.Warn("failed to close USB device", "error", err)
 		}
@@ -189,9 +177,8 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 	return printers, nil
 }
 
-// Connect opens a connection to the specified printer
+// Connect opens a USB connection to the specified printer.
 func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
-	// Parse URI to extract bus and address
 	var bus, address int
 	_, err := fmt.Sscanf(printer.URI, "usb:%d:%d", &bus, &address)
 	if err != nil {
@@ -200,14 +187,12 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 
 	log.Printf("USB: Connecting to %s at bus=%d address=%d", printer.Model, bus, address)
 
-	// Open USB context
 	ctx := gousb.NewContext()
 
-	// Find the device by bus and address
 	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		return desc.Vendor == brotherVendorID &&
-			int(desc.Bus) == bus &&
-			int(desc.Address) == address
+			desc.Bus == bus &&
+			desc.Address == address
 	})
 	if err != nil {
 		if cerr := ctx.Close(); cerr != nil {
@@ -224,7 +209,6 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 	}
 
 	if len(devices) > 1 {
-		// Close all devices
 		for _, dev := range devices {
 			if cerr := dev.Close(); cerr != nil {
 				slog.Warn("failed to close USB device", "error", cerr)
@@ -236,10 +220,8 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 		return nil, fmt.Errorf("multiple devices found at bus=%d address=%d (unexpected)", bus, address)
 	}
 
-	// Use the first (and only) device
 	dev := devices[0]
 
-	// Create USBBackend using existing implementation
 	backend, err := NewUSBBackend(dev)
 	if err != nil {
 		if cerr := dev.Close(); cerr != nil {
@@ -251,14 +233,13 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 		return nil, fmt.Errorf("failed to initialize USB backend: %w", err)
 	}
 
-	// Store context in backend for cleanup
 	backend.ctx = ctx
 
 	log.Printf("USB: Successfully connected to %s", printer.Model)
 	return backend, nil
 }
 
-// SupportsStatus returns true because USB backend supports ESC i S status queries
+// SupportsStatus returns true because the USB backend supports ESC i S status queries.
 func (p *USBProvider) SupportsStatus() bool {
 	return true
 }

@@ -1,18 +1,18 @@
 package api
 
 import (
-	"goqlprinter/brotherql"
-	"goqlprinter/internal/services"
 	"bytes"
 	"encoding/base64"
 	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
-	"math/rand"
 	"net/http"
 	"os"
 	"time"
+
+	"goqlprinter/brotherql"
+	"goqlprinter/internal/services"
 
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
@@ -45,7 +45,6 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	// Decode base64 PNG data
 	pngBytes, err := base64.StdEncoding.DecodeString(payload.PNGData)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid base64 PNG data: " + err.Error()})
@@ -58,23 +57,21 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	// Get local variables for easier access
 	printer := payload.Printer
 	model := payload.Model
 	labelSize := payload.LabelSize
 
-	// 3. Hae label info
 	label, err := brotherql.GetLabel(labelSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid label_size"})
 		return
 	}
 
-	// 4. Skaalaa ja keskittää PNG labelin printable area:lle
+	// Scale and center the PNG image within the printable area.
 	wantW := label.DotsPrintableWidth
 	wantH := label.DotsPrintableHeight
 	if wantH == 0 {
-		wantH = 300 // fallback, kuten muissa
+		wantH = 300 // fallback for continuous tape
 	}
 
 	resized := imaging.Fit(img, wantW, wantH, imaging.Lanczos)
@@ -84,14 +81,13 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	offsetY := (wantH - resized.Bounds().Dy()) / 2
 	draw.Draw(grayImg, image.Rect(offsetX, offsetY, offsetX+resized.Bounds().Dx(), offsetY+resized.Bounds().Dy()), resized, image.Point{0, 0}, draw.Over)
 
-	// Handle "print to file" case separately
 	if printer == "file" {
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, grayImg); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "PNG encode failed"})
 			return
 		}
-		filename := fmt.Sprintf("debug_output/labelpng_%d.png", randInt63())
+		filename := fmt.Sprintf("debug_output/labelpng_%d.png", time.Now().UnixNano())
 		if err := writeFile(filename, buf.Bytes()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save PNG: " + err.Error()})
 			return
@@ -100,7 +96,6 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	// Use our new USB connection helper
 	err = services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(grayImg, label)
@@ -114,16 +109,10 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "Print job sent successfully"})
 }
 
-// Helper functions
-
-func randInt63() int64 {
-	return time.Now().UnixNano() + rand.Int63()
-}
-
 func writeFile(filename string, data []byte) error {
-	err := os.MkdirAll("debug_output", 0755)
+	err := os.MkdirAll("debug_output", 0750)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, data, 0644)
+	return os.WriteFile(filename, data, 0600)
 }
