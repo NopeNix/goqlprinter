@@ -7,7 +7,8 @@ OUT_DIR = dist
 .PHONY: all build run clean help \
 	build-linux-usb build-windows-usb \
 	build-linux-native build-linux-arm-native build-windows-native build-darwin-native \
-	build-all
+	build-all \
+	install-frontend build-frontend dev
 
 # Default: build for current platform
 all: build
@@ -17,6 +18,20 @@ build:
 
 run:
 	go run .
+
+# Frontend targets
+install-frontend:
+	cd frontend && npm install
+
+build-frontend:
+	cd frontend && npm run build
+
+# Dev: run Go backend + Vite devserver concurrently
+dev:
+	@trap 'kill 0' SIGINT; \
+	go run . & \
+	cd frontend && npm run dev & \
+	wait
 
 # Cross-compilation: USB backend (CGO required)
 build-linux-usb:
@@ -69,3 +84,8 @@ help:
 	@echo "    make build-darwin-native    - macOS (amd64 + arm64)"
 	@echo ""
 	@echo "  make build-all          - Build all cross-compilation targets"
+	@echo ""
+	@echo "  Frontend:"
+	@echo "    make install-frontend   - npm install"
+	@echo "    make build-frontend     - npm run build (output to frontend/dist)"
+	@echo "    make dev                - Go backend + Vite devserver concurrently"

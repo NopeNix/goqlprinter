@@ -1,32 +1,16 @@
 {
   "server": {
     "port": 8000,
-    "host": "localhost",
-    "timeout": 30,
-    "max_upload_size": "10MB"
+    "host": "localhost"
   },
   "app": {
+    "backend": "auto",
+    "default_printer": "QL-570",
     "font_dirs": [
       "./fonts",
       "/usr/share/fonts/truetype",
       "/usr/local/share/fonts",
       "~/.fonts"
-    ],
-    "default_printer": "QL-570",
-    "log_level": "DEBUG",
-    "auto_refresh_printers": true,
-    "printer_refresh_interval": 60,
-    "default_label_size": "62",
-    "default_dpi": 600,
-    "temp_dir": "/tmp/labelprinter",
-    "debug": false,
-    "usb_timeout": 5000,
-    "network_timeout": 10000
-  },
-  "printer": {
-    "default_orientation": "portrait",
-    "default_margin": 10,
-    "default_quality": "high",
-    "compression_enabled": true
+    ]
   }
 }

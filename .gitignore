@@ -7,6 +7,11 @@ qlprinter.exe
 # Build output
 dist/
 
+# Frontend
+frontend/node_modules/
+frontend/.serena/
+frontend/.claude/
+
 # Debug
 debug_output/
 
