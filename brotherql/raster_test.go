@@ -186,3 +186,129 @@ func TestDrawText_EmptyTextIsNoop(t *testing.T) {
 		t.Errorf("DrawText with empty text returned error: %v, want nil", err)
 	}
 }
+
+func TestSaveImageToFile(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(10, 10)
+	tmpFile := filepath.Join(t.TempDir(), "test_output.png")
+
+	err := SaveImageToFile(img, tmpFile)
+	if err != nil {
+		t.Fatalf("SaveImageToFile returned error: %v", err)
+	}
+
+	// Verify file was created and is non-empty
+	info, err := os.Stat(tmpFile)
+	if err != nil {
+		t.Fatalf("output file not found: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("output file is empty")
+	}
+}
+
+func TestSaveImageToFile_InvalidPath(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(10, 10)
+	err := SaveImageToFile(img, "/nonexistent/dir/file.png")
+	if err == nil {
+		t.Error("expected error for invalid path, got nil")
+	}
+}
+
+func TestRotateImage(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(100, 50)
+	rotated := RotateImage(img, 90)
+	if rotated == nil {
+		t.Fatal("RotateImage returned nil")
+	}
+	// After 90 degree rotation, dimensions should approximately swap
+	// (the imaging library may add padding)
+	if rotated.Bounds().Dx() == 0 || rotated.Bounds().Dy() == 0 {
+		t.Error("rotated image has zero dimensions")
+	}
+}
+
+func TestRotateImage_ZeroDegrees(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(100, 50)
+	rotated := RotateImage(img, 0)
+	if rotated.Bounds().Dx() != 100 || rotated.Bounds().Dy() != 50 {
+		t.Errorf("0-degree rotation changed dimensions: got %dx%d, want 100x50",
+			rotated.Bounds().Dx(), rotated.Bounds().Dy())
+	}
+}
+
+func TestDrawQRCode(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(200, 200)
+	err := DrawQRCode(img, "https://example.com", 10, 10, 100)
+	if err != nil {
+		t.Fatalf("DrawQRCode returned error: %v", err)
+	}
+
+	// Verify some pixels were changed (not all white anymore)
+	allWhite := true
+	for y := 10; y < 110 && allWhite; y++ {
+		for x := 10; x < 110; x++ {
+			if img.GrayAt(x, y).Y < 250 {
+				allWhite = false
+				break
+			}
+		}
+	}
+	if allWhite {
+		t.Error("DrawQRCode did not draw any dark pixels")
+	}
+}
+
+func TestDrawQRCode_EmptyContent(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(200, 200)
+	err := DrawQRCode(img, "", 10, 10, 100)
+	// Empty content causes an error from the QR library
+	if err == nil {
+		t.Error("expected error for empty QR content, got nil")
+	}
+}
+
+func TestDrawText_WithRotation(t *testing.T) {
+	t.Parallel()
+
+	fontPath := findTestFont()
+	if fontPath == "" {
+		t.Skip("no .ttf font file found; skipping rotated DrawText test")
+	}
+
+	img := CreateBlankImage(300, 300)
+	err := DrawText(img, "Rotated", fontPath, 20, 50, 50, 90)
+	if err != nil {
+		t.Fatalf("DrawText with rotation returned error: %v", err)
+	}
+}
+
+func TestDrawText_InvalidFont(t *testing.T) {
+	t.Parallel()
+
+	img := CreateBlankImage(100, 50)
+	err := DrawText(img, "Hello", "/nonexistent/font.ttf", 12, 0, 0, 0)
+	if err == nil {
+		t.Error("expected error for invalid font path, got nil")
+	}
+}
+
+func TestMeasureText_InvalidFont(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := MeasureText("Hello", "/nonexistent/font.ttf", 12)
+	if err == nil {
+		t.Error("expected error for invalid font path, got nil")
+	}
+}
