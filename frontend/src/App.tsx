@@ -346,33 +346,14 @@ function MainApp() {
         return;
       }
       endpoint = "/api/print";
-      let h_align = horizontalAlignment;
-      let v_align = verticalAlignment;
-      if (textRotation === 90) {
-        h_align = verticalAlignment;
-        v_align =
-          horizontalAlignment === "start"
-            ? "end"
-            : horizontalAlignment === "end"
-              ? "start"
-              : "center";
-      } else if (textRotation === 270) {
-        v_align = horizontalAlignment;
-        h_align =
-          verticalAlignment === "start"
-            ? "end"
-            : verticalAlignment === "end"
-              ? "start"
-              : "center";
-      }
       payload = {
         ...payload,
         text: labelText,
         font_family: selectedFont,
         font_size: fontSize[0],
         orientation: selectedOrientation,
-        horizontal_alignment: h_align,
-        vertical_alignment: v_align,
+        horizontal_alignment: horizontalAlignment,
+        vertical_alignment: verticalAlignment,
         text_rotation: textRotation,
       };
     } else if (printMode === "qr") {

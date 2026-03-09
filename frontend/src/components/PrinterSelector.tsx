@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Select,
   SelectContent,
@@ -93,6 +93,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [refreshDebounced, setRefreshDebounced] = useState(false);
+  const hasInitialized = useRef(false);
 
   // Load saved printer from localStorage (returns both ID and name)
   const loadSavedPrinter = useCallback((): { id: string | null; name: string | null } => {
@@ -120,67 +121,77 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
     }
   }, []);
 
-  const fetchPrinters = useCallback(async () => {
+  // Fetch printer list only — no auto-selection logic
+  const fetchPrinterList = useCallback(async (): Promise<PrinterInfo[]> => {
+    const response = await fetch('/api/printers');
+    if (!response.ok) throw new Error('Failed to fetch printers');
+    const data = await response.json();
+    return data.printers || [];
+  }, []);
+
+  // Auto-select printer based on saved state (only called on initial load)
+  const autoSelectPrinter = useCallback((printersList: PrinterInfo[]) => {
+    const saved = loadSavedPrinter();
+
+    if (saved.id || saved.name) {
+      // "file" printer is a valid selection — keep it
+      if (saved.id === "file") {
+        onSelectPrinter(FILE_PRINTER);
+        return;
+      }
+
+      // First try to find by exact ID
+      const printerById = printersList.find((p: PrinterInfo) => p.id === saved.id);
+
+      if (printerById) {
+        onSelectPrinter(printerById);
+      } else {
+        // ID not found - try to find by model name
+        const printerByName = saved.name
+          ? printersList.find((p: PrinterInfo) => p.name === saved.name)
+          : null;
+
+        if (printerByName) {
+          setNotification(`Printer reconnected at new address: ${printerByName.id}`);
+          onSelectPrinter(printerByName);
+          savePrinter(printerByName.id, printerByName.name);
+        } else if (printersList.length > 0) {
+          setNotification("Previously selected printer not found. Selected first available.");
+          onSelectPrinter(printersList[0]);
+          savePrinter(printersList[0].id, printersList[0].name);
+        } else {
+          setNotification("No printers found. Using file output.");
+          onSelectPrinter(FILE_PRINTER);
+          savePrinter(FILE_PRINTER.id, FILE_PRINTER.name);
+        }
+      }
+    } else if (printersList.length > 0) {
+      onSelectPrinter(printersList[0]);
+      savePrinter(printersList[0].id, printersList[0].name);
+    } else {
+      onSelectPrinter(FILE_PRINTER);
+      savePrinter(FILE_PRINTER.id, FILE_PRINTER.name);
+    }
+  }, [loadSavedPrinter, savePrinter, onSelectPrinter]);
+
+  // Refresh: fetch list + optionally auto-select on first call
+  const refreshPrinters = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/printers');
-      if (!response.ok) throw new Error('Failed to fetch printers');
-
-      const data = await response.json();
-      const printersList = data.printers || [];
+      const printersList = await fetchPrinterList();
       setPrinters(printersList);
 
-      // Load saved printer (ID and name) and validate
-      const saved = loadSavedPrinter();
-
-      if (saved.id || saved.name) {
-        // First try to find by exact ID
-        const printerById = printersList.find((p: PrinterInfo) => p.id === saved.id);
-
-        if (printerById) {
-          // Exact ID match found - use it (only if not already selected)
-          if (value !== printerById.id) {
-            onSelectPrinter(printerById);
-          }
-        } else {
-          // ID not found - try to find by model name
-          const printerByName = saved.name
-            ? printersList.find((p: PrinterInfo) => p.name === saved.name)
-            : null;
-
-          if (printerByName) {
-            // Same model found with different USB address
-            setNotification(`Printer reconnected at new address: ${printerByName.id}`);
-            onSelectPrinter(printerByName);
-            savePrinter(printerByName.id, printerByName.name);
-          } else if (printersList.length > 0) {
-            // Neither ID nor name found - select first available
-            setNotification("Previously selected printer not found. Selected first available.");
-            onSelectPrinter(printersList[0]);
-            savePrinter(printersList[0].id, printersList[0].name);
-          } else {
-            // No printers available
-            setNotification("No printers found. Using file output.");
-            onSelectPrinter(FILE_PRINTER);
-            savePrinter(FILE_PRINTER.id, FILE_PRINTER.name);
-          }
-        }
-      } else if (printersList.length > 0) {
-        // No saved printer - auto-select first available
-        onSelectPrinter(printersList[0]);
-        savePrinter(printersList[0].id, printersList[0].name);
-      } else {
-        // No saved printer, no printers available
-        onSelectPrinter(FILE_PRINTER);
-        savePrinter(FILE_PRINTER.id, FILE_PRINTER.name);
+      if (!hasInitialized.current) {
+        hasInitialized.current = true;
+        autoSelectPrinter(printersList);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [value, loadSavedPrinter, savePrinter, onSelectPrinter]);
+  }, [fetchPrinterList, autoSelectPrinter]);
 
   const fetchStatus = useCallback(async () => {
     if (!value || value === 'file') {
@@ -223,42 +234,43 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
     }
   }, [value, onDetectLabelSize, manualOverride]);
 
-  // Debounced refresh handler
+  // Debounced refresh handler (manual refresh button)
   const handleRefresh = useCallback(() => {
     if (refreshDebounced) return;
-    
+
     setRefreshDebounced(true);
     setError(null);
     setNotification(null);
-    
-    fetchPrinters().then(() => {
+
+    // Manual refresh should re-run auto-selection
+    hasInitialized.current = false;
+    refreshPrinters().then(() => {
       if (value) {
         fetchStatus();
       }
     });
 
-    // Clear debounce after 2 seconds
     setTimeout(() => {
       setRefreshDebounced(false);
     }, 2000);
-  }, [refreshDebounced, fetchPrinters, fetchStatus, value]);
+  }, [refreshDebounced, refreshPrinters, fetchStatus, value]);
 
   const handleValueChange = useCallback((id: string) => {
     const printer = printers.find(p => p.id === id) || FILE_PRINTER;
     onSelectPrinter(printer);
     savePrinter(printer.id, printer.name);
     setNotification(null);
-    
+
     // Clear label status when changing printer
     if (id !== value) {
       setLabelStatus(null);
     }
   }, [printers, onSelectPrinter, savePrinter, value]);
 
-  // Initial load - fetch printers and status once
+  // Initial load
   useEffect(() => {
-    fetchPrinters();
-  }, [fetchPrinters]);
+    refreshPrinters();
+  }, [refreshPrinters]);
 
   // Fetch status when printer is selected
   useEffect(() => {
@@ -281,11 +293,11 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchPrinters();
+        refreshPrinters();
       }
     };
 
-    const handleFocus = () => fetchPrinters();
+    const handleFocus = () => refreshPrinters();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
@@ -294,25 +306,15 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [fetchPrinters]);
+  }, [refreshPrinters]);
 
   // Light polling - refresh printer list every 30 seconds
   useEffect(() => {
-    const interval = setInterval(fetchPrinters, 30000);
+    const interval = setInterval(refreshPrinters, 30000);
     return () => clearInterval(interval);
-  }, [fetchPrinters]);
+  }, [refreshPrinters]);
 
-  // Reactive refresh - if current value is not in printer list, refresh
-  useEffect(() => {
-    if (value && value !== 'file' && printers.length > 0 && !loading) {
-      const found = printers.find(p => p.id === value);
-      if (!found) {
-        fetchPrinters();
-      }
-    }
-  }, [value, printers, loading, fetchPrinters]);
-
-  const selectedPrinterInfo = printers.find(p => p.id === value) || 
+  const selectedPrinterInfo = printers.find(p => p.id === value) ||
     (value === 'file' ? FILE_PRINTER : null);
 
   if (loading && printers.length === 0) {
@@ -334,7 +336,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
             </SelectContent>
           </Select>
         </div>
-        
+
         <div className="flex items-center justify-center py-4">
           <RefreshCw className="h-5 w-5 animate-spin mr-2" />
           <span className="text-sm text-muted-foreground">Loading printers...</span>
@@ -401,7 +403,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
       {labelStatus && !manualOverride && (
         <div className="border border-gray-200 rounded-lg p-4 space-y-4">
           <h4 className="text-sm font-medium">Printer Status Information</h4>
-          
+
           <div>
             <h5 className="text-sm font-medium mb-2">Detected Label:</h5>
             <div className="space-y-2">
@@ -421,7 +423,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
               )}
             </div>
           </div>
-          
+
           <div>
             <h5 className="text-sm font-medium mb-2">Printer Status:</h5>
             <div className="space-y-2">
@@ -447,7 +449,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
           </div>
         </div>
       )}
-      
+
       {!labelStatus && value && value !== 'file' && !loading && (
         <div className="border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-center py-2">

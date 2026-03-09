@@ -34,6 +34,7 @@ type PrintRequest struct {
 // renderTextLabel renders text onto a grayscale image sized for the given label.
 func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, error) {
 	padding := 10
+	isRotated := req.Orientation == "rotated"
 
 	fontPath, err := h.Fonts.GetFontPath(req.FontFamily)
 	if err != nil {
@@ -56,24 +57,33 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 		textBoundsHeight = unrotatedHeight
 	}
 
+	// When orientation is "rotated", swap effective canvas dimensions.
+	// We render on a swapped canvas, then rotate the final image 90°.
+	canvasWidth := label.DotsPrintableWidth
+	canvasHeight := label.DotsPrintableHeight
+	if isRotated {
+		canvasWidth = label.DotsPrintableHeight
+		canvasHeight = label.DotsPrintableWidth
+	}
+
 	// Die-cut labels have a fixed height; continuous tape is sized to content.
 	var imageHeight int
-	if label.DotsPrintableHeight > 0 {
-		imageHeight = label.DotsPrintableHeight
+	if canvasHeight > 0 {
+		imageHeight = canvasHeight
 	} else {
 		imageHeight = textBoundsHeight + (2 * padding)
 	}
 
-	img := brotherql.CreateBlankImage(label.DotsPrintableWidth, imageHeight)
+	img := brotherql.CreateBlankImage(canvasWidth, imageHeight)
 
 	var x int
 	switch req.HorizontalAlignment {
 	case "start":
 		x = padding
 	case "center":
-		x = (label.DotsPrintableWidth - textBoundsWidth) / 2
+		x = (canvasWidth - textBoundsWidth) / 2
 	case "end":
-		x = label.DotsPrintableWidth - textBoundsWidth - padding
+		x = canvasWidth - textBoundsWidth - padding
 	default:
 		x = padding
 	}
@@ -93,6 +103,12 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 	err = brotherql.DrawText(img, req.Text, fontPath, scaledFontSize, x, y, req.TextRotation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to draw text: %w", err)
+	}
+
+	// Rotate the entire image 90° for "rotated" orientation so it
+	// matches the print head width (DotsPrintableWidth).
+	if isRotated {
+		img = brotherql.RotateImage(img, 90)
 	}
 
 	return img, nil

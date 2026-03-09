@@ -25,7 +25,8 @@ func CreateBlankImage(width, height int) *image.Gray {
 }
 
 // DrawText draws text onto an image, with optional rotation.
-// x, y are the top-left coordinates of the text's bounding box *before* rotation.
+// x, y are the top-left coordinates where the final (possibly rotated) text
+// bounding box should be placed on the target image.
 func DrawText(img *image.Gray, text string, fontPath string, size float64, x, y int, rotationAngle float64) error {
 	if text == "" {
 		return nil
@@ -88,19 +89,10 @@ func DrawText(img *image.Gray, text string, fontPath string, size float64, x, y 
 	rotatedGray := image.NewGray(finalImage.Bounds())
 	draw.Draw(rotatedGray, rotatedGray.Bounds(), finalImage, finalImage.Bounds().Min, draw.Src)
 
-	// Center the rotated text on the target coordinates in the main image.
-	tempWidth := textWidth + leftOffset
-	tempHeight := textHeight
-	targetCenterX := x + tempWidth/2
-	targetCenterY := y + tempHeight/2
-
+	// Place the (rotated) text at the given x, y position.
 	rotatedWidth := rotatedGray.Bounds().Dx()
 	rotatedHeight := rotatedGray.Bounds().Dy()
-
-	drawX := targetCenterX - rotatedWidth/2
-	drawY := targetCenterY - rotatedHeight/2
-
-	draw.Draw(img, image.Rect(drawX, drawY, drawX+rotatedWidth, drawY+rotatedHeight), rotatedGray, image.Point{}, draw.Over)
+	draw.Draw(img, image.Rect(x, y, x+rotatedWidth, y+rotatedHeight), rotatedGray, image.Point{}, draw.Over)
 
 	return nil
 }
