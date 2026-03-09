@@ -38,7 +38,7 @@ const FontSelector: React.FC<FontSelectorProps> = ({ onSelectFont }) => {
           onSelectFontRef.current(initialFont);
         }
       })
-      .catch(error => console.error('Error fetching fonts:', error));
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

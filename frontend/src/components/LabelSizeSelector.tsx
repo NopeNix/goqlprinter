@@ -31,7 +31,7 @@ const LabelSizeSelector: React.FC<LabelSizeSelectorProps> = ({ value, onLabelSiz
           onLabelSizeChange(sizes[0]);
         }
       })
-      .catch(error => console.error('Error fetching label sizes:', error));
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
 

@@ -163,7 +163,6 @@ export function usePrintJob({
           png_data: base64Data,
         };
       } catch (error) {
-        console.error("Error converting file to base64:", error);
         toast.error("Could not process PNG file.");
         return;
       }
@@ -182,7 +181,6 @@ export function usePrintJob({
       await printFn(payload);
       toast.success("Print job sent successfully!");
     } catch (error) {
-      console.error("Failed to send print job:", error);
       if (isUsbDeviceError(error)) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
