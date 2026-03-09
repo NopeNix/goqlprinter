@@ -15,13 +15,12 @@ import (
 // ConnectToPrinter handles USB printer connection using gousb.
 // It uses the PrinterService to resolve the printer identifier.
 func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride string, handler PrinterHandler) error {
-	resolvedPrinter, err := svc.ResolvePrinter(printerIdentifier)
-	if err != nil {
-		return fmt.Errorf("printer resolution error: %w", err)
-	}
+	printerLock.Lock()
+	defer printerLock.Unlock()
 
-	if resolvedPrinter.UID == "file" {
-		return fmt.Errorf("file printer cannot be connected to via USB")
+	resolvedPrinter, modelToUse, err := connectCommon(svc, printerIdentifier, modelOverride)
+	if err != nil {
+		return err
 	}
 
 	if !strings.HasPrefix(resolvedPrinter.UID, "usb:") {
@@ -74,11 +73,6 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 		return fmt.Errorf("failed to create USB backend: %w", err)
 	}
 	defer backend.Close()
-
-	modelToUse := resolvedPrinter.Model
-	if modelOverride != "" {
-		modelToUse = modelOverride
-	}
 
 	if modelToUse == "" {
 		return fmt.Errorf("printer model not specified")

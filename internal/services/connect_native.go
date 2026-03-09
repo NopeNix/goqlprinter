@@ -13,17 +13,16 @@ import (
 // ConnectToPrinter handles printer connection using native OS backend.
 // It uses the PrinterService to resolve the printer and the embedded provider to connect.
 func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride string, handler PrinterHandler) error {
+	printerLock.Lock()
+	defer printerLock.Unlock()
+
 	if svc == nil || svc.provider == nil {
 		return fmt.Errorf("no backend provider configured")
 	}
 
-	resolvedPrinter, err := svc.ResolvePrinter(printerIdentifier)
+	resolvedPrinter, modelToUse, err := connectCommon(svc, printerIdentifier, modelOverride)
 	if err != nil {
-		return fmt.Errorf("printer resolution error: %w", err)
-	}
-
-	if resolvedPrinter.UID == "file" {
-		return fmt.Errorf("file printer cannot be connected")
+		return err
 	}
 
 	// Convert FoundPrinter -> PrinterInfo
@@ -63,11 +62,6 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 			slog.Warn("failed to close backend", "error", cerr)
 		}
 	}()
-
-	modelToUse := resolvedPrinter.Model
-	if modelOverride != "" {
-		modelToUse = modelOverride
-	}
 
 	return handler(backend, modelToUse)
 }

@@ -11,9 +11,11 @@ import (
 )
 
 // FoundPrinter holds information about a discovered printer.
+// JSON tags match the frontend LabelPrinter interface (name/id),
+// while Go fields use domain terminology (Model/UID).
 type FoundPrinter struct {
-	Model string `json:"name"`
-	UID   string `json:"id"`
+	Model string `json:"name"` // printer model (e.g. "QL-800"); JSON "name" matches frontend API
+	UID   string `json:"id"`   // connection URI (e.g. "usb:001:005"); JSON "id" matches frontend API
 }
 
 // PrinterService manages printer discovery and connection, with all state encapsulated.

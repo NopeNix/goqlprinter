@@ -70,14 +70,14 @@ func NewBrotherQL(model string, backend Backend) *BrotherQL {
 	}
 }
 
-// flipImageHorizontally mirrors an image left-to-right as required by the Brother protocol.
-func flipImageHorizontally(src image.Image) image.Image {
+// flipImageHorizontally mirrors a grayscale image left-to-right as required by the Brother protocol.
+func flipImageHorizontally(src *image.Gray) *image.Gray {
 	bounds := src.Bounds()
-	dst := image.NewRGBA(bounds)
+	dst := image.NewGray(bounds)
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			srcX := bounds.Max.X - (x - bounds.Min.X) - 1
-			dst.Set(x, y, src.At(srcX, y))
+			dst.SetGray(x, y, src.GrayAt(srcX, y))
 		}
 	}
 	return dst
@@ -95,14 +95,46 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 		slog.Warn("Model warning", "error", err)
 	}
 
-	var buf bytes.Buffer
 	bounds := img.Bounds()
 	height := bounds.Max.Y
 
 	slog.Debug("Image dimensions", "width", bounds.Dx(), "height", bounds.Dy())
 
-	// Phase 0: send invalidate + initialize to clear any error state from a
-	// previous failed print, then drain any stale status bytes the printer queued.
+	// Phase 0: reset the printer and drain stale bytes.
+	if err := p.resetAndDrain(model); err != nil {
+		return err
+	}
+
+	// The printer expects raster data for the full physical print-head width, not just
+	// the printable area. Compositing the image onto a white canvas of the correct
+	// raster width adds the required blank margins and prevents image stretching.
+	rasterWidthPixels := model.RasterWidthBytes * 8
+	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
+
+	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
+
+	offsetX := (rasterWidthPixels - bounds.Dx()) / 2
+	offset := image.Point{X: offsetX, Y: 0}
+	drawRect := bounds.Add(offset)
+
+	draw.Draw(fullWidthImg, drawRect, img, bounds.Min, draw.Src)
+
+	// The protocol requires raster data to be mirrored horizontally.
+	flippedImg := flipImageHorizontally(fullWidthImg)
+
+	// Phase 1: build the command stream.
+	cmdBuf, err := p.buildCommandStream(flippedImg, label, model, height)
+	if err != nil {
+		return err
+	}
+
+	// Phase 2: send commands and verify status.
+	return p.sendAndVerify(cmdBuf.Bytes())
+}
+
+// resetAndDrain sends invalidate + ESC @ to clear any error state from a
+// previous failed print, then drains any stale status bytes the printer queued.
+func (p *BrotherQL) resetAndDrain(model PrinterModel) error {
 	var resetBuf bytes.Buffer
 	resetBuf.Write(bytes.Repeat([]byte{0x00}, model.InvalidateBytes))
 	resetBuf.Write([]byte{0x1B, 0x40}) // ESC @: initialize
@@ -127,26 +159,17 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 		ts.SetReadTimeout(3 * time.Second)
 	}
 
-	// The printer expects raster data for the full physical print-head width, not just
-	// the printable area. Compositing the image onto a white canvas of the correct
-	// raster width adds the required blank margins and prevents image stretching.
+	return nil
+}
+
+// buildCommandStream assembles the Brother QL command buffer: mode switch,
+// media/quality settings, margins, auto-cut, compression, and raster rows.
+func (p *BrotherQL) buildCommandStream(flippedImg *image.Gray, label LabelSize, model PrinterModel, height int) (*bytes.Buffer, error) {
 	rasterWidthPixels := model.RasterWidthBytes * 8
-	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
-
-	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
-
-	offsetX := (rasterWidthPixels - bounds.Dx()) / 2
-	offset := image.Point{X: offsetX, Y: 0}
-	drawRect := bounds.Add(offset)
-
-	draw.Draw(fullWidthImg, drawRect, img, bounds.Min, draw.Src)
-
-	// The protocol requires raster data to be mirrored horizontally.
-	flippedImg := flipImageHorizontally(fullWidthImg)
 	rasterData := p.rasterize(flippedImg, model.RasterWidthBytes, rasterWidthPixels)
 	slog.Debug("Rasterized rows of data", "rows", len(rasterData))
 
-	// Phase 1: build command stream (invalidate + initialize were sent in Phase 0).
+	var buf bytes.Buffer
 
 	// Switch to raster mode (not supported on all models).
 	if model.SupportsSwitchMode {
@@ -210,7 +233,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 
 		length := len(dataToSend)
 		if length > 255 {
-			return fmt.Errorf("raster row is too long (%d bytes) for a single-byte length", length)
+			return nil, fmt.Errorf("raster row is too long (%d bytes) for a single-byte length", length)
 		}
 
 		buf.Write([]byte{0x67, 0x00}) // 'g': raster data transfer
@@ -220,9 +243,13 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 
 	buf.WriteByte(0x1A) // 0x1A: print and feed
 
-	totalBytes := buf.Len()
-	slog.Debug("Sending bytes to printer", "total_bytes", totalBytes)
-	_, err = p.backend.Write(buf.Bytes())
+	return &buf, nil
+}
+
+// sendAndVerify writes the command data to the printer and checks the status response.
+func (p *BrotherQL) sendAndVerify(data []byte) error {
+	slog.Debug("Sending bytes to printer", "total_bytes", len(data))
+	_, err := p.backend.Write(data)
 	if err != nil {
 		slog.Error("Failed to write to printer", "error", err)
 		return err
