@@ -29,6 +29,7 @@ import (
 // @Param file formData file true "PNG file to print"
 // @Param printer formData string false "Printer identifier (optional)"
 // @Param model formData string false "Printer model override (optional)"
+// @Param custom_height_mm formData number false "Custom tape length in mm (endless tape only)"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -69,11 +70,28 @@ func (h *Handlers) PrintPNGRaw(c *gin.Context) {
 		return
 	}
 
+	// Parse optional custom_height_mm from form data.
+	var customHeightMM float64
+	if v := c.PostForm("custom_height_mm"); v != "" {
+		customHeightMM, _ = strconv.ParseFloat(v, 64)
+	}
+
 	// Scale and center the PNG image within the printable area.
 	wantW := label.DotsPrintableWidth
 	wantH := label.DotsPrintableHeight
 	if wantH == 0 {
-		wantH = 300 // fallback for continuous tape
+		if customHeightMM > 0 {
+			wantH = mmToDots(customHeightMM)
+		} else {
+			// Proportional scaling from source image aspect ratio.
+			srcBounds := img.Bounds()
+			if srcBounds.Dx() > 0 {
+				wantH = srcBounds.Dy() * wantW / srcBounds.Dx()
+			}
+			if wantH == 0 {
+				wantH = 300 // ultimate fallback
+			}
+		}
 	}
 
 	resized := imaging.Fit(img, wantW, wantH, imaging.Lanczos)

@@ -14,10 +14,11 @@ import (
 // PrintQRRequest defines the structure for printing QR codes
 // @description Request body for printing QR code labels
 type PrintQRRequest struct {
-	Printer   string `json:"printer"` // Optional
-	Model     string `json:"model"`   // Optional
-	LabelSize string `json:"label_size" binding:"required"`
-	Data      string `json:"data" binding:"required"`
+	Printer        string  `json:"printer"` // Optional
+	Model          string  `json:"model"`   // Optional
+	LabelSize      string  `json:"label_size" binding:"required"`
+	Data           string  `json:"data" binding:"required"`
+	CustomHeightMM float64 `json:"custom_height_mm"`
 }
 
 // PrintQR godoc
@@ -45,17 +46,21 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 	}
 
 	padding := 10
-	var imageHeight int
 	var qrSize int
 
-	if label.DotsPrintableHeight > 0 {
-		// Die-cut: fit the QR code within the printable area.
-		imageHeight = label.DotsPrintableHeight
+	// Determine tape length for continuous tape with custom height.
+	tapeLengthDots := label.DotsPrintableHeight
+	if tapeLengthDots == 0 && req.CustomHeightMM > 0 && !label.IsDieCut {
+		tapeLengthDots = mmToDots(req.CustomHeightMM)
+	}
+
+	if tapeLengthDots > 0 {
+		// Die-cut or custom height: fit the QR code within the printable area.
 		drawableWidth := label.DotsPrintableWidth - 2*padding
-		drawableHeight := imageHeight - 2*padding
+		drawableHeight := tapeLengthDots - 2*padding
 		qrSize = min(drawableWidth, drawableHeight)
 	} else {
-		// Continuous tape: use half the label width (QR is square).
+		// Continuous tape, no custom height: use half the label width (QR is square).
 		qrSize = label.DotsPrintableWidth / 2
 	}
 

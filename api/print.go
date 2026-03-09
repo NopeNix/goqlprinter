@@ -29,6 +29,12 @@ type PrintRequest struct {
 	SVGScale               float64 `json:"svg_scale"`
 	SVGHorizontalAlignment string  `json:"svg_horizontal_alignment"`
 	SVGVerticalAlignment   string  `json:"svg_vertical_alignment"`
+	CustomHeightMM         float64 `json:"custom_height_mm"`
+}
+
+// mmToDots converts millimeters to dots at 300 DPI.
+func mmToDots(mm float64) int {
+	return int(mm * 300.0 / 25.4)
 }
 
 // renderTextLabel renders text onto a grayscale image sized for the given label.
@@ -57,24 +63,37 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 		textBoundsHeight = unrotatedHeight
 	}
 
-	// When orientation is "rotated", swap effective canvas dimensions.
-	// We render on a swapped canvas, then rotate the final image 90°.
-	canvasWidth := label.DotsPrintableWidth
-	canvasHeight := label.DotsPrintableHeight
-	if isRotated {
-		canvasWidth = label.DotsPrintableHeight
-		canvasHeight = label.DotsPrintableWidth
-	}
+	// printHeadDots is always the fixed print-head dimension.
+	printHeadDots := label.DotsPrintableWidth
 
-	// Die-cut labels have a fixed height; continuous tape is sized to content.
-	var imageHeight int
-	if canvasHeight > 0 {
-		imageHeight = canvasHeight
+	// tapeLengthDots: custom > label-defined > 0 (dynamic).
+	var tapeLengthDots int
+	if req.CustomHeightMM > 0 && !label.IsDieCut {
+		tapeLengthDots = mmToDots(req.CustomHeightMM)
 	} else {
-		imageHeight = textBoundsHeight + (2 * padding)
+		tapeLengthDots = label.DotsPrintableHeight // 0 for endless tape
 	}
 
-	img := brotherql.CreateBlankImage(canvasWidth, imageHeight)
+	// Determine canvas dimensions based on orientation.
+	var canvasWidth, canvasHeight int
+	if isRotated {
+		// Rotated: we render on a swapped canvas, then rotate 90°.
+		canvasHeight = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasWidth = tapeLengthDots
+		} else {
+			canvasWidth = textBoundsWidth + (2 * padding) // dynamic
+		}
+	} else {
+		canvasWidth = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasHeight = tapeLengthDots
+		} else {
+			canvasHeight = textBoundsHeight + (2 * padding) // dynamic
+		}
+	}
+
+	img := brotherql.CreateBlankImage(canvasWidth, canvasHeight)
 
 	var x int
 	switch req.HorizontalAlignment {
@@ -93,9 +112,9 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 	case "start":
 		y = padding
 	case "center":
-		y = (imageHeight - textBoundsHeight) / 2
+		y = (canvasHeight - textBoundsHeight) / 2
 	case "end":
-		y = imageHeight - textBoundsHeight - padding
+		y = canvasHeight - textBoundsHeight - padding
 	default:
 		y = padding
 	}
@@ -150,6 +169,7 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 			SVGScale:               req.SVGScale,
 			SVGHorizontalAlignment: req.SVGHorizontalAlignment,
 			SVGVerticalAlignment:   req.SVGVerticalAlignment,
+			CustomHeightMM:         req.CustomHeightMM,
 		}
 		img, err = processSVG(c.Request.Context(), svgReq, label)
 		if err != nil {

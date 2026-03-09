@@ -26,6 +26,7 @@ type PreviewRequest struct {
 	SVGScale               float64 `json:"svg_scale"`
 	SVGHorizontalAlignment string  `json:"svg_horizontal_alignment"`
 	SVGVerticalAlignment   string  `json:"svg_vertical_alignment"`
+	CustomHeightMM         float64 `json:"custom_height_mm"`
 }
 
 // PreviewResponse defines the response structure
@@ -70,6 +71,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			SVGScale:               req.SVGScale,
 			SVGHorizontalAlignment: req.SVGHorizontalAlignment,
 			SVGVerticalAlignment:   req.SVGVerticalAlignment,
+			CustomHeightMM:         req.CustomHeightMM,
 		}
 		img, err = processSVG(c.Request.Context(), svgReq, label)
 		if err != nil {
@@ -86,6 +88,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			HorizontalAlignment: req.HorizontalAlignment,
 			VerticalAlignment:   req.VerticalAlignment,
 			TextRotation:        req.TextRotation,
+			CustomHeightMM:      req.CustomHeightMM,
 		}
 		img, err = h.renderTextLabel(printReq, label)
 		if err != nil {

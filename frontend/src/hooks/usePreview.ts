@@ -14,6 +14,8 @@ interface UsePreviewParams {
   svgScale?: number;
   svgHorizontalAlignment?: string;
   svgVerticalAlignment?: string;
+  // Endless tape custom height
+  customHeightMM?: number;
   // Control
   enabled?: boolean; // default true, allows disabling preview fetching
 }
@@ -38,6 +40,7 @@ interface PreviewRequest {
   svg_scale?: number;
   svg_horizontal_alignment?: string;
   svg_vertical_alignment?: string;
+  custom_height_mm?: number;
 }
 
 interface PreviewResponse {
@@ -73,6 +76,7 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     svgScale,
     svgHorizontalAlignment,
     svgVerticalAlignment,
+    customHeightMM,
     enabled = true,
   } = params;
 
@@ -103,6 +107,11 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         vertical_alignment: verticalAlignment,
         text_rotation: textRotation,
       };
+
+      // Add custom height for endless tape
+      if (customHeightMM && customHeightMM > 0) {
+        requestBody.custom_height_mm = customHeightMM;
+      }
 
       // Add SVG fields if present
       if (svgData) {
@@ -170,6 +179,7 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     svgScale,
     svgHorizontalAlignment,
     svgVerticalAlignment,
+    customHeightMM,
   ]);
 
   /**

@@ -22,6 +22,8 @@ interface LabelPreviewProps {
   svgHorizontalAlignment: "start" | "center" | "end";
   svgVerticalAlignment: "start" | "center" | "end";
   previewUrl?: string | null; // Backend-rendered preview image
+  customHeightMM?: number; // Custom height for endless tape in mm
+  heightMode?: "auto" | "manual"; // Height mode for endless tape
 }
 
 const PREVIEW_SCALE_FACTOR = 4; // Scales mm to pixels for the outer container
@@ -48,6 +50,8 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
   svgHorizontalAlignment,
   svgVerticalAlignment,
   previewUrl,
+  customHeightMM = 0,
+  heightMode = "auto",
 }) => {
   const [isFontAvailable, setIsFontAvailable] = useState(true);
 
@@ -66,30 +70,53 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
 
   const isLabelRotated = orientation === 'rotated';
 
+  // Endless tape detection and manual height handling
+  const isEndlessTape = labelHeight === 0;
+  const useManualHeight = isEndlessTape && heightMode === "manual" && customHeightMM > 0;
+
+  // For endless tape with manual height, compute effective dimensions
+  // For auto mode on endless tape, use a default preview height if backend hasn't provided dimensions
+  const autoEndlessHeightMM = isEndlessTape && !useManualHeight ? Math.max(labelWidth, 50) : 0;
+  const effectiveLabelHeight = useManualHeight
+    ? customHeightMM
+    : isEndlessTape
+      ? autoEndlessHeightMM
+      : labelHeight;
+  const effectiveDotsTotalHeight = useManualHeight
+    ? Math.round(customHeightMM * DOTS_PER_MM)
+    : isEndlessTape && !useManualHeight
+      ? Math.round(autoEndlessHeightMM * DOTS_PER_MM)
+      : dotsTotalHeight;
+  const effectivePrintableLabelHeight = useManualHeight
+    ? Math.round(customHeightMM * DOTS_PER_MM)
+    : isEndlessTape && !useManualHeight
+      ? Math.round(autoEndlessHeightMM * DOTS_PER_MM)
+      : printableLabelHeight;
+
   // Use physical dimensions for the outer container to keep preview size consistent
-  const containerWidth = (isLabelRotated ? labelHeight : labelWidth) * PREVIEW_SCALE_FACTOR;
-  const containerHeight = (isLabelRotated ? labelWidth : labelHeight) * PREVIEW_SCALE_FACTOR;
+  const containerWidth = (isLabelRotated ? effectiveLabelHeight : labelWidth) * PREVIEW_SCALE_FACTOR;
+  const containerHeight = (isLabelRotated ? labelWidth : effectiveLabelHeight) * PREVIEW_SCALE_FACTOR;
 
   // Calculate the scaling factor from total dots to container pixels
   const scaleX =
-    containerWidth / (isLabelRotated ? dotsTotalHeight : dotsTotalWidth);
+    containerWidth / (isLabelRotated ? effectiveDotsTotalHeight : dotsTotalWidth);
   const scaleY =
-    containerHeight / (isLabelRotated ? dotsTotalWidth : dotsTotalHeight);
+    containerHeight / (isLabelRotated ? dotsTotalWidth : effectiveDotsTotalHeight);
 
   // Use the smaller scale factor to maintain aspect ratio
   const scale = Math.min(scaleX, scaleY);
 
   // Dimensions of the entire label area in pixels
   const totalWidthPx =
-    (isLabelRotated ? dotsTotalHeight : dotsTotalWidth) * scale;
+    (isLabelRotated ? effectiveDotsTotalHeight : dotsTotalWidth) * scale;
   const totalHeightPx =
-    (isLabelRotated ? dotsTotalWidth : dotsTotalHeight) * scale;
+    (isLabelRotated ? dotsTotalWidth : effectiveDotsTotalHeight) * scale;
 
   // Dimensions of the printable area in pixels
   const printableWidthPx =
-    (isLabelRotated ? printableLabelHeight : printableLabelWidth) * scale;
+    (isLabelRotated ? effectivePrintableLabelHeight : printableLabelWidth) * scale;
   const printableHeightPx =
-    (isLabelRotated ? printableLabelWidth : printableLabelHeight) * scale;
+    (isLabelRotated ? printableLabelWidth : effectivePrintableLabelHeight) * scale;
 
   // Margins in pixels
   const marginX = (totalWidthPx - printableWidthPx) / 2;
@@ -97,7 +124,9 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
 
   // Calculate printable area in mm for display
   const printableWidthMm = (printableLabelWidth / DOTS_PER_MM).toFixed(1);
-  const printableHeightMm = (printableLabelHeight / DOTS_PER_MM).toFixed(1);
+  const displayPrintableHeightMm = useManualHeight
+    ? customHeightMM.toFixed(1)
+    : (printableLabelHeight / DOTS_PER_MM).toFixed(1);
 
   const containerStyle: React.CSSProperties = {
     width: `${totalWidthPx}px`,
@@ -304,9 +333,10 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
       <div className="text-sm text-gray-500">
         Printable Area:{" "}
         {isLabelRotated
-          ? `${printableHeightMm} x ${printableWidthMm}`
-          : `${printableWidthMm} x ${printableHeightMm}`}{" "}
+          ? `${displayPrintableHeightMm} x ${printableWidthMm}`
+          : `${printableWidthMm} x ${displayPrintableHeightMm}`}{" "}
         mm
+        {isEndlessTape && heightMode === "auto" && " (auto)"}
       </div>
     </div>
   );

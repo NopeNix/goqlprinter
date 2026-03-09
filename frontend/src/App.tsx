@@ -62,6 +62,8 @@ interface AppSettings {
   svgVerticalAlignment: "start" | "center" | "end";
   manualOverride?: boolean;
   settingsMode?: "auto" | "manual";
+  customHeightMM?: number;
+  heightMode?: "auto" | "manual";
 }
 
 const FILE_PRINTER = { id: "file", name: "Print to File" };
@@ -149,6 +151,16 @@ function MainApp() {
   const [svgVerticalAlignment, setSvgVerticalAlignment] = useState<
     "start" | "center" | "end"
   >(savedSettings?.svgVerticalAlignment || "center");
+  const [customHeightMM, setCustomHeightMM] = useState<number>(
+    savedSettings?.customHeightMM || 0,
+  );
+  const [heightMode, setHeightMode] = useState<"auto" | "manual">(
+    savedSettings?.heightMode || "auto",
+  );
+
+  // Endless tape detection: both labelHeight (mm) and printableLabelHeight (dots)
+  // are 0 for continuous/endless tape. Check both to handle stale defaults.
+  const isEndlessTape = labelHeight === 0 || printableLabelHeight === 0;
 
   // Backend preview integration
   const { previewUrl, isLoading: previewLoading, error: previewError } = usePreview({
@@ -164,6 +176,7 @@ function MainApp() {
     svgScale: svgScale[0] / 100,
     svgHorizontalAlignment,
     svgVerticalAlignment,
+    customHeightMM: heightMode === "manual" ? customHeightMM : 0,
     enabled: printMode === 'text' || printMode === 'svg', // Only for text/SVG modes
   });
 
@@ -191,6 +204,8 @@ function MainApp() {
       svgVerticalAlignment,
       manualOverride,
       settingsMode,
+      customHeightMM,
+      heightMode,
     };
     saveSettings(settings);
   }, [
@@ -214,6 +229,8 @@ function MainApp() {
     svgScale,
     svgHorizontalAlignment,
     svgVerticalAlignment,
+    customHeightMM,
+    heightMode,
   ]);
 
   const handleLabelSizeChange = useCallback((size: { id: string }) => {
@@ -254,6 +271,8 @@ function MainApp() {
       setSvgScale([100]);
       setSvgHorizontalAlignment("center");
       setSvgVerticalAlignment("center");
+      setCustomHeightMM(0);
+      setHeightMode("auto");
       setPngFile(null);
     }
   };
@@ -334,10 +353,12 @@ function MainApp() {
     }
 
     let endpoint = "";
+    const customHeight = heightMode === "manual" ? customHeightMM : 0;
     let payload: any = {
       printer: selectedPrinter.id,
       model: selectedPrinter.name,
       label_size: selectedLabelSize,
+      ...(customHeight > 0 && { custom_height_mm: customHeight }),
     };
 
     if (printMode === "text") {
@@ -653,6 +674,42 @@ function MainApp() {
                   </div>
                 </RadioGroup>
                 <div className="pt-4">{renderContentSpecificControls()}</div>
+                {isEndlessTape && (
+                  <div className="border border-gray-200 rounded-lg p-3 mt-4 bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
+                    <Label className="text-sm font-medium mb-2 block">Tape Length</Label>
+                    <RadioGroup
+                      value={heightMode}
+                      onValueChange={(value: string) =>
+                        setHeightMode(value as "auto" | "manual")
+                      }
+                      className="flex space-x-4 mb-2"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="auto" id="height-auto" />
+                        <Label htmlFor="height-auto" className="text-sm">Auto (fit to content)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="manual" id="height-manual" />
+                        <Label htmlFor="height-manual" className="text-sm">Manual</Label>
+                      </div>
+                    </RadioGroup>
+                    {heightMode === "manual" && (
+                      <div className="flex items-center space-x-2 mt-2">
+                        <Label htmlFor="custom-height" className="text-sm whitespace-nowrap">Height (mm):</Label>
+                        <input
+                          id="custom-height"
+                          type="number"
+                          min={10}
+                          max={2000}
+                          value={customHeightMM || ""}
+                          onChange={(e) => setCustomHeightMM(Math.max(0, Math.min(2000, Number(e.target.value))))}
+                          placeholder="e.g. 100"
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="space-y-2 flex-col">
                 <Button onClick={handlePrint} className="w-full">
@@ -686,7 +743,7 @@ function MainApp() {
                         onDetectLabelSize={(labelSizeId) => {
                           if (settingsMode === "auto") {
                             console.log("Auto-detected label size:", labelSizeId);
-                            setSelectedLabelSize(labelSizeId);
+                            handleLabelSizeChange({ id: labelSizeId });
                           }
                         }}
                         manualOverride={settingsMode === "manual"}
@@ -780,6 +837,8 @@ function MainApp() {
                   svgHorizontalAlignment={svgHorizontalAlignment}
                   svgVerticalAlignment={svgVerticalAlignment}
                   previewUrl={(printMode === 'text' || printMode === 'svg') ? previewUrl : null}
+                  customHeightMM={customHeightMM}
+                  heightMode={heightMode}
                 />
               </CardContent>
             </Card>

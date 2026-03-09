@@ -77,6 +77,7 @@ type PrintSVGRequest struct {
 	SVGScale               float64 `json:"svg_scale"`
 	SVGHorizontalAlignment string  `json:"svg_horizontal_alignment"`
 	SVGVerticalAlignment   string  `json:"svg_vertical_alignment"`
+	CustomHeightMM         float64 `json:"custom_height_mm"`
 }
 
 // PrintSVG godoc
@@ -119,15 +120,25 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 		scale = 1.0
 	}
 
+	printHeadDots := label.DotsPrintableWidth
+
+	// tapeLengthDots: custom > label-defined > 0 (dynamic).
+	var tapeLengthDots int
+	if req.CustomHeightMM > 0 && !label.IsDieCut {
+		tapeLengthDots = mmToDots(req.CustomHeightMM)
+	} else {
+		tapeLengthDots = label.DotsPrintableHeight // 0 for endless tape
+	}
+
 	var svgImg image.Image
 	var err error
 	var imageHeight int
 
-	if label.DotsPrintableHeight > 0 { // die-cut: fixed height
-		imageHeight = label.DotsPrintableHeight
-		svgImg, err = rasterizeSVG(ctx, req.SVGData, label.DotsPrintableWidth, imageHeight, scale)
-	} else { // continuous tape: derive height from rendered SVG
-		svgImg, err = rasterizeSVG(ctx, req.SVGData, label.DotsPrintableWidth, 0, scale)
+	if tapeLengthDots > 0 { // die-cut or custom height: fixed
+		imageHeight = tapeLengthDots
+		svgImg, err = rasterizeSVG(ctx, req.SVGData, printHeadDots, imageHeight, scale)
+	} else { // continuous tape, no custom height: derive from rendered SVG
+		svgImg, err = rasterizeSVG(ctx, req.SVGData, printHeadDots, 0, scale)
 		if err == nil {
 			imageHeight = svgImg.Bounds().Dy()
 		}
@@ -137,15 +148,15 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 		return nil, fmt.Errorf("SVG processing failed: %v", err)
 	}
 
-	img := brotherql.CreateBlankImage(label.DotsPrintableWidth, imageHeight)
+	img := brotherql.CreateBlankImage(printHeadDots, imageHeight)
 	grayImg := convertToGrayscale(svgImg)
 
 	var xPos, yPos int
 	switch req.SVGHorizontalAlignment {
 	case "center":
-		xPos = (label.DotsPrintableWidth - grayImg.Bounds().Dx()) / 2
+		xPos = (printHeadDots - grayImg.Bounds().Dx()) / 2
 	case "end":
-		xPos = label.DotsPrintableWidth - grayImg.Bounds().Dx()
+		xPos = printHeadDots - grayImg.Bounds().Dx()
 	default:
 		xPos = 0
 	}

@@ -21,10 +21,11 @@ import (
 // PrintPNGPayload defines the structure for the JSON request
 // @description Request body for printing PNG images
 type PrintPNGPayload struct {
-	Printer   string `json:"printer"` // Optional
-	Model     string `json:"model"`   // Optional
-	LabelSize string `json:"label_size" binding:"required"`
-	PNGData   string `json:"png_data" binding:"required"`
+	Printer        string  `json:"printer"` // Optional
+	Model          string  `json:"model"`   // Optional
+	LabelSize      string  `json:"label_size" binding:"required"`
+	PNGData        string  `json:"png_data" binding:"required"`
+	CustomHeightMM float64 `json:"custom_height_mm"`
 }
 
 // PrintPNGLabel godoc
@@ -71,7 +72,18 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	wantW := label.DotsPrintableWidth
 	wantH := label.DotsPrintableHeight
 	if wantH == 0 {
-		wantH = 300 // fallback for continuous tape
+		if payload.CustomHeightMM > 0 {
+			wantH = mmToDots(payload.CustomHeightMM)
+		} else {
+			// Proportional scaling from source image aspect ratio.
+			srcBounds := img.Bounds()
+			if srcBounds.Dx() > 0 {
+				wantH = srcBounds.Dy() * wantW / srcBounds.Dx()
+			}
+			if wantH == 0 {
+				wantH = 300 // ultimate fallback
+			}
+		}
 	}
 
 	resized := imaging.Fit(img, wantW, wantH, imaging.Lanczos)
