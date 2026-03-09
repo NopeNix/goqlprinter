@@ -49,41 +49,11 @@ func initializeBackendProvider(cfg *icfg.Config) brotherql.BackendProvider {
 		return createNativeProvider()
 
 	case "auto":
-		// Try USB first (supports status queries), then fall back to native.
-		slog.Info("Auto mode: trying USB backend first (supports status queries)")
-		usbProvider := initUSBProvider()
-		if usbProvider != nil {
-			printers, err := usbProvider.FindPrinters()
-			if err == nil && len(printers) > 0 {
-				slog.Info("USB backend found printers, using USB backend", "count", len(printers))
-				return usbProvider
-			}
-			slog.Info("USB backend found no printers, trying native backend", "error", err)
-		} else {
-			slog.Info("USB backend not available, trying native backend")
-		}
-
-		nativeProvider := createNativeProvider()
-		printers, err := nativeProvider.FindPrinters()
-		if err == nil && len(printers) > 0 {
-			slog.Info("Native backend found printers, using native backend", "count", len(printers))
-			slog.Warn("Note: Native backend does not support printer status queries")
-			return nativeProvider
-		}
-
-		slog.Warn("No printers found with any backend")
-		return nativeProvider // Return native as fallback even if empty
+		return autoDetectProvider()
 
 	default:
 		slog.Warn("Unknown backend, falling back to auto mode", "backend", backend)
-		usbProvider := initUSBProvider()
-		if usbProvider != nil {
-			printers, err := usbProvider.FindPrinters()
-			if err == nil && len(printers) > 0 {
-				return usbProvider
-			}
-		}
-		return createNativeProvider()
+		return autoDetectProvider()
 	}
 }
 
@@ -93,9 +63,34 @@ func createNativeProvider() brotherql.BackendProvider {
 	return brotherql.NewNativeProvider()
 }
 
-func main() {
-	logging.Init("INFO")
+// autoDetectProvider tries USB first (supports status queries), then falls back to native.
+func autoDetectProvider() brotherql.BackendProvider {
+	slog.Info("Auto mode: trying USB backend first (supports status queries)")
+	usbProvider := initUSBProvider()
+	if usbProvider != nil {
+		printers, err := usbProvider.FindPrinters()
+		if err == nil && len(printers) > 0 {
+			slog.Info("USB backend found printers, using USB backend", "count", len(printers))
+			return usbProvider
+		}
+		slog.Info("USB backend found no printers, trying native backend", "error", err)
+	} else {
+		slog.Info("USB backend not available, trying native backend")
+	}
 
+	nativeProvider := createNativeProvider()
+	printers, err := nativeProvider.FindPrinters()
+	if err == nil && len(printers) > 0 {
+		slog.Info("Native backend found printers, using native backend", "count", len(printers))
+		slog.Warn("Note: Native backend does not support printer status queries")
+		return nativeProvider
+	}
+
+	slog.Warn("No printers found with any backend")
+	return nativeProvider // Return native as fallback even if empty
+}
+
+func main() {
 	startupMsg := `
   ____        _      __  __       _ _
  |  _ \      | |    |  \/  |     (_) |
@@ -105,6 +100,12 @@ func main() {
  |____/ \__,_|_.__(_)_|  |_|\__,_|_|_|\___|_| |_|
 `
 	fmt.Println(startupMsg)
+
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "INFO"
+	}
+	logging.Init(logLevel)
 
 	slog.Info("Loading configuration...")
 	cfg, err := icfg.LoadConfig()
@@ -133,12 +134,6 @@ func main() {
 	} else {
 		gin.SetMode(os.Getenv("GIN_MODE"))
 	}
-
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "ERROR"
-	}
-	logging.Init(logLevel)
 
 	if strings.ToUpper(logLevel) == "DEBUG" {
 		gin.DefaultWriter = os.Stdout
