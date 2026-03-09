@@ -83,6 +83,39 @@ func flipImageHorizontally(src *image.Gray) *image.Gray {
 	return dst
 }
 
+// prepareRaster left-aligns the image within the full print-head raster width
+// and applies the mandatory horizontal flip required by the Brother protocol.
+// Returns the processed image ready for rasterization.
+//
+// The tape is physically aligned to the left edge of the print head.
+// After the horizontal flip the content ends up on the right side of the
+// raster, which maps to the tape's physical position.
+func prepareRaster(img image.Image, model PrinterModel) *image.Gray {
+	bounds := img.Bounds()
+	height := bounds.Max.Y
+
+	rasterWidthPixels := model.RasterWidthBytes * 8
+	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
+
+	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
+
+	draw.Draw(fullWidthImg, bounds, img, bounds.Min, draw.Src)
+
+	// The protocol requires raster data to be mirrored horizontally.
+	return flipImageHorizontally(fullWidthImg)
+}
+
+// PrepareForPrint applies the same raster processing as Print (right-align +
+// horizontal flip) and returns the result. Useful for debugging: the returned
+// image is exactly what the printer would receive.
+func PrepareForPrint(img image.Image, modelName string) (*image.Gray, error) {
+	model, err := GetModel(modelName)
+	if err != nil {
+		slog.Warn("Model warning", "error", err)
+	}
+	return prepareRaster(img, model), nil
+}
+
 // Print sends an image to the printer following the Brother protocol exactly.
 func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	slog.Debug("=== Starting Print Function ===")
@@ -95,36 +128,17 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 		slog.Warn("Model warning", "error", err)
 	}
 
-	bounds := img.Bounds()
-	height := bounds.Max.Y
-
-	slog.Debug("Image dimensions", "width", bounds.Dx(), "height", bounds.Dy())
+	slog.Debug("Image dimensions", "width", img.Bounds().Dx(), "height", img.Bounds().Dy())
 
 	// Phase 0: reset the printer and drain stale bytes.
 	if err := p.resetAndDrain(model); err != nil {
 		return err
 	}
 
-	// The printer expects raster data for the full physical print-head width, not just
-	// the printable area. The tape is physically aligned to the right edge of the
-	// print head, so the image must be right-aligned here (which becomes left-aligned
-	// after the mandatory horizontal flip), matching the tape's physical position.
-	rasterWidthPixels := model.RasterWidthBytes * 8
-	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
-
-	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
-
-	offsetX := rasterWidthPixels - bounds.Dx()
-	offset := image.Point{X: offsetX, Y: 0}
-	drawRect := bounds.Add(offset)
-
-	draw.Draw(fullWidthImg, drawRect, img, bounds.Min, draw.Src)
-
-	// The protocol requires raster data to be mirrored horizontally.
-	flippedImg := flipImageHorizontally(fullWidthImg)
+	flippedImg := prepareRaster(img, model)
 
 	// Phase 1: build the command stream.
-	cmdBuf, err := p.buildCommandStream(flippedImg, label, model, height)
+	cmdBuf, err := p.buildCommandStream(flippedImg, label, model, img.Bounds().Max.Y)
 	if err != nil {
 		return err
 	}

@@ -21,8 +21,6 @@ interface LabelPreviewProps {
   verticalAlignment: "start" | "center" | "end";
   textRotation: number;
   svgScale: number;
-  svgHorizontalAlignment: "start" | "center" | "end";
-  svgVerticalAlignment: "start" | "center" | "end";
   previewUrl?: string | null; // Backend-rendered preview image
   customHeightMM?: number; // Custom height for endless tape in mm
   heightMode?: "auto" | "manual"; // Height mode for endless tape
@@ -57,8 +55,6 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
   verticalAlignment,
   textRotation,
   svgScale,
-  svgHorizontalAlignment,
-  svgVerticalAlignment,
   previewUrl,
   customHeightMM = 0,
   heightMode = "auto",
@@ -294,16 +290,16 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
 
       // Calculate alignment offsets
       let left = 0;
-      if (svgHorizontalAlignment === 'center') {
+      if (horizontalAlignment === 'center') {
         left = (printableWidthPx - scaledWidth) / 2;
-      } else if (svgHorizontalAlignment === 'end') {
+      } else if (horizontalAlignment === 'end') {
         left = printableWidthPx - scaledWidth;
       }
 
       let top = 0;
-      if (svgVerticalAlignment === 'center') {
+      if (verticalAlignment === 'center') {
         top = (printableHeightPx - scaledHeight) / 2;
-      } else if (svgVerticalAlignment === 'end') {
+      } else if (verticalAlignment === 'end') {
         top = printableHeightPx - scaledHeight;
       }
 

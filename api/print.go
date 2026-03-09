@@ -12,6 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	defaultModel   = "QL-820NWB"
+	defaultPadding = 10
+)
+
 // PrintRequest defines the structure for the print request
 // @description Request body for printing labels with text or SVG content
 type PrintRequest struct {
@@ -25,10 +30,8 @@ type PrintRequest struct {
 	HorizontalAlignment    string  `json:"horizontal_alignment"`
 	VerticalAlignment      string  `json:"vertical_alignment"`
 	TextRotation           float64 `json:"text_rotation"`
-	SVGData                string  `json:"svg_data"`
-	SVGScale               float64 `json:"svg_scale"`
-	SVGHorizontalAlignment string  `json:"svg_horizontal_alignment"`
-	SVGVerticalAlignment   string  `json:"svg_vertical_alignment"`
+	SVGData        string  `json:"svg_data"`
+	SVGScale       float64 `json:"svg_scale"`
 	CustomHeightMM         float64 `json:"custom_height_mm"`
 }
 
@@ -37,9 +40,34 @@ func mmToDots(mm float64) int {
 	return int(mm * 300.0 / 25.4)
 }
 
+// saveDebugOutput saves img to a debug PNG file (and its raster variant) and
+// writes a JSON response. It is used by all print handlers when printer == "file".
+func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model string) {
+	timestamp := time.Now().Format("20060102150405")
+	filename := fmt.Sprintf("debug_output/%s_%s.png", prefix, timestamp)
+	err := brotherql.SaveImageToFile(img, filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save image to file: %v", err)})
+		return
+	}
+	// Also save the raster as the printer would receive it (right-align + flip).
+	rasterFile := fmt.Sprintf("debug_output/%s_%s_raster.png", prefix, timestamp)
+	modelName := model
+	if modelName == "" {
+		modelName = defaultModel
+	}
+	if rasterImg, err := brotherql.PrepareForPrint(img, modelName); err == nil {
+		_ = brotherql.SaveImageToFile(rasterImg, rasterFile)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":      "Image saved to file successfully",
+		"filename":    filename,
+		"raster_file": rasterFile,
+	})
+}
+
 // renderTextLabel renders text onto a grayscale image sized for the given label.
 func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, error) {
-	padding := 10
 	isRotated := req.Orientation == "rotated"
 
 	fontPath, err := h.Fonts.GetFontPath(req.FontFamily)
@@ -82,14 +110,14 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 		if tapeLengthDots > 0 {
 			canvasWidth = tapeLengthDots
 		} else {
-			canvasWidth = textBoundsWidth + (2 * padding) // dynamic
+			canvasWidth = textBoundsWidth + (2 * defaultPadding) // dynamic
 		}
 	} else {
 		canvasWidth = printHeadDots
 		if tapeLengthDots > 0 {
 			canvasHeight = tapeLengthDots
 		} else {
-			canvasHeight = textBoundsHeight + (2 * padding) // dynamic
+			canvasHeight = textBoundsHeight + (2 * defaultPadding) // dynamic
 		}
 	}
 
@@ -98,25 +126,25 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 	var x int
 	switch req.HorizontalAlignment {
 	case "start":
-		x = padding
+		x = defaultPadding
 	case "center":
 		x = (canvasWidth - textBoundsWidth) / 2
 	case "end":
-		x = canvasWidth - textBoundsWidth - padding
+		x = canvasWidth - textBoundsWidth - defaultPadding
 	default:
-		x = padding
+		x = defaultPadding
 	}
 
 	var y int
 	switch req.VerticalAlignment {
 	case "start":
-		y = padding
+		y = defaultPadding
 	case "center":
 		y = (canvasHeight - textBoundsHeight) / 2
 	case "end":
-		y = canvasHeight - textBoundsHeight - padding
+		y = canvasHeight - textBoundsHeight - defaultPadding
 	default:
-		y = padding
+		y = defaultPadding
 	}
 
 	err = brotherql.DrawText(img, req.Text, fontPath, scaledFontSize, x, y, req.TextRotation)
@@ -162,14 +190,14 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 	if req.SVGData != "" {
 		var err error
 		svgReq := PrintSVGRequest{
-			LabelSize:              req.LabelSize,
-			SVGData:                req.SVGData,
-			Printer:                req.Printer,
-			Model:                  req.Model,
-			SVGScale:               req.SVGScale,
-			SVGHorizontalAlignment: req.SVGHorizontalAlignment,
-			SVGVerticalAlignment:   req.SVGVerticalAlignment,
-			CustomHeightMM:         req.CustomHeightMM,
+			LabelSize:           req.LabelSize,
+			SVGData:             req.SVGData,
+			Printer:             req.Printer,
+			Model:               req.Model,
+			SVGScale:            req.SVGScale,
+			HorizontalAlignment: req.HorizontalAlignment,
+			VerticalAlignment:   req.VerticalAlignment,
+			CustomHeightMM:      req.CustomHeightMM,
 		}
 		img, err = processSVG(c.Request.Context(), svgReq, label)
 		if err != nil {
@@ -186,14 +214,7 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 	}
 
 	if req.Printer == "file" {
-		timestamp := time.Now().Format("20060102150405")
-		filename := fmt.Sprintf("debug_output/label_%s.png", timestamp)
-		err := brotherql.SaveImageToFile(img, filename)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save image to file: %v", err)})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "Image saved to file successfully", "filename": filename})
+		saveDebugOutput(c, img, "label", req.Model)
 		return
 	}
 

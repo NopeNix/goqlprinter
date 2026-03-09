@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -45,7 +44,6 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		return
 	}
 
-	padding := 10
 	var qrSize int
 
 	// Determine tape length for continuous tape with custom height.
@@ -56,8 +54,8 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 
 	if tapeLengthDots > 0 {
 		// Die-cut or custom height: fit the QR code within the printable area.
-		drawableWidth := label.DotsPrintableWidth - 2*padding
-		drawableHeight := tapeLengthDots - 2*padding
+		drawableWidth := label.DotsPrintableWidth - 2*defaultPadding
+		drawableHeight := tapeLengthDots - 2*defaultPadding
 		qrSize = min(drawableWidth, drawableHeight)
 	} else {
 		// Continuous tape, no custom height: use half the label width (QR is square).
@@ -69,23 +67,27 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		return
 	}
 
-	img := brotherql.CreateBlankImage(qrSize+2*padding, qrSize+2*padding)
+	canvasWidth := label.DotsPrintableWidth
+	var canvasHeight int
+	if tapeLengthDots > 0 {
+		canvasHeight = tapeLengthDots
+	} else {
+		canvasHeight = qrSize + 2*defaultPadding
+	}
 
-	err = brotherql.DrawQRCode(img, req.Data, padding, padding, qrSize)
+	xPos := (canvasWidth - qrSize) / 2
+	yPos := (canvasHeight - qrSize) / 2
+
+	img := brotherql.CreateBlankImage(canvasWidth, canvasHeight)
+
+	err = brotherql.DrawQRCode(img, req.Data, xPos, yPos, qrSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to draw QR code: %v", err)})
 		return
 	}
 
 	if req.Printer == "file" {
-		timestamp := time.Now().Format("20060102150405")
-		filename := fmt.Sprintf("debug_output/label_qr_%s.png", timestamp)
-		err := brotherql.SaveImageToFile(img, filename)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save image to file: %v", err)})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "Image saved to file successfully", "filename": filename})
+		saveDebugOutput(c, img, "label_qr", req.Model)
 		return
 	}
 

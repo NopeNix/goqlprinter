@@ -19,11 +19,11 @@ build:
 serve:
     go run . serve
 
-# Dev: Go backend + Vite devserver concurrently (Ctrl+C stops both)
+# Dev: Go backend + Vite devserver concurrently, log to file + screen (Ctrl+C stops both)
 dev:
     #!/usr/bin/env bash
     trap 'kill 0' SIGINT
-    go run . serve &
+    go run . serve 2>&1 | tee debug_log.log &
     cd frontend && npm run dev &
     wait
 
@@ -114,6 +114,35 @@ package:
 # Remove build artifacts
 clean:
     rm -rf {{out_dir}} goqlprinter goqlprinter.exe
+
+# ─── Debug / Raster Tests ──────────────────────────────
+
+# Start a test server, run the given test script(s), then guarantee cleanup.
+[private]
+run-raster-test +SCRIPTS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PORT=8000
+    if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
+        echo "ERROR: port ${PORT} already in use — stop the existing server first" >&2
+        exit 1
+    fi
+    go build -o /tmp/goqlprinter_test .
+    cleanup() { kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null || true; }
+    trap cleanup EXIT INT TERM
+    /tmp/goqlprinter_test serve &>/tmp/goqlprinter_test.log &
+    SERVER_PID=$!
+    for i in {1..20}; do curl -s "http://localhost:${PORT}/api/config" >/dev/null 2>&1 && break; sleep 0.5; done
+    for script in {{SCRIPTS}}; do python3 "$script"; done
+
+# Test SVG alignment and scaling (prints to file, analyzes raster positions)
+test-svg: (run-raster-test "scripts/test_svg.py")
+
+# Test QR code generation and centering (prints to file, analyzes raster positions)
+test-qr: (run-raster-test "scripts/test_qr.py")
+
+# Run all raster tests (SVG + QR)
+test-raster: (run-raster-test "scripts/test_svg.py" "scripts/test_qr.py")
 
 # ─── Utilities ──────────────────────────────────────────
 

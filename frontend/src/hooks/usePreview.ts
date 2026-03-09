@@ -13,8 +13,6 @@ interface UsePreviewParams {
   // SVG optional
   svgData?: string | null;
   svgScale?: number;
-  svgHorizontalAlignment?: string;
-  svgVerticalAlignment?: string;
   // Endless tape custom height
   customHeightMM?: number;
   // Control
@@ -38,8 +36,6 @@ interface PreviewRequest {
   text_rotation: number;
   svg_data?: string;
   svg_scale?: number;
-  svg_horizontal_alignment?: string;
-  svg_vertical_alignment?: string;
   custom_height_mm?: number;
   [key: string]: unknown;
 }
@@ -67,8 +63,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     textRotation,
     svgData,
     svgScale,
-    svgHorizontalAlignment,
-    svgVerticalAlignment,
     customHeightMM,
     enabled = true,
   } = params;
@@ -112,12 +106,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
       if (svgScale !== undefined) {
         requestBody.svg_scale = svgScale;
       }
-      if (svgHorizontalAlignment) {
-        requestBody.svg_horizontal_alignment = svgHorizontalAlignment;
-      }
-      if (svgVerticalAlignment) {
-        requestBody.svg_vertical_alignment = svgVerticalAlignment;
-      }
 
       const data = await printApi.preview(requestBody, signal);
 
@@ -150,8 +138,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     textRotation,
     svgData,
     svgScale,
-    svgHorizontalAlignment,
-    svgVerticalAlignment,
     customHeightMM,
   ]);
 

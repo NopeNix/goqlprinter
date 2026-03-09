@@ -41,8 +41,6 @@ export interface LabelSettings {
   horizontalAlignment: "start" | "center" | "end";
   verticalAlignment: "start" | "center" | "end";
   textRotation: number;
-  svgHorizontalAlignment: "start" | "center" | "end";
-  svgVerticalAlignment: "start" | "center" | "end";
 
   // Endless tape
   heightMode: "auto" | "manual";
@@ -65,8 +63,6 @@ export type LabelSettingsAction =
   | { type: "SET_HORIZONTAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_VERTICAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_TEXT_ROTATION"; payload: number }
-  | { type: "SET_SVG_HORIZONTAL_ALIGNMENT"; payload: "start" | "center" | "end" }
-  | { type: "SET_SVG_VERTICAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_HEIGHT_MODE"; payload: "auto" | "manual" }
   | { type: "SET_CUSTOM_HEIGHT_MM"; payload: number }
   | { type: "RESET" };
@@ -88,8 +84,6 @@ export const DEFAULT_SETTINGS: LabelSettings = {
   horizontalAlignment: "center",
   verticalAlignment: "center",
   textRotation: 0,
-  svgHorizontalAlignment: "center",
-  svgVerticalAlignment: "center",
   heightMode: "auto",
   customHeightMM: 0,
 };
@@ -137,12 +131,6 @@ function migrateFromOldFormat(saved: Record<string, unknown>): LabelSettings {
         DEFAULT_SETTINGS.verticalAlignment,
       textRotation:
         (saved.textRotation as number) ?? DEFAULT_SETTINGS.textRotation,
-      svgHorizontalAlignment:
-        (saved.svgHorizontalAlignment as "start" | "center" | "end") ||
-        DEFAULT_SETTINGS.svgHorizontalAlignment,
-      svgVerticalAlignment:
-        (saved.svgVerticalAlignment as "start" | "center" | "end") ||
-        DEFAULT_SETTINGS.svgVerticalAlignment,
       heightMode:
         (saved.heightMode as "auto" | "manual") || DEFAULT_SETTINGS.heightMode,
       customHeightMM:
@@ -197,10 +185,6 @@ function labelSettingsReducer(
       return { ...state, verticalAlignment: action.payload };
     case "SET_TEXT_ROTATION":
       return { ...state, textRotation: action.payload };
-    case "SET_SVG_HORIZONTAL_ALIGNMENT":
-      return { ...state, svgHorizontalAlignment: action.payload };
-    case "SET_SVG_VERTICAL_ALIGNMENT":
-      return { ...state, svgVerticalAlignment: action.payload };
     case "SET_HEIGHT_MODE":
       return { ...state, heightMode: action.payload };
     case "SET_CUSTOM_HEIGHT_MM":

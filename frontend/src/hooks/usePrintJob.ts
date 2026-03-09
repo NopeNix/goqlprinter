@@ -142,7 +142,9 @@ export function usePrintJob({
         ...payload,
         svg_data: svgData,
         orientation: settings.selectedOrientation,
-        scale: settings.svgScale[0] / 100,
+        svg_scale: settings.svgScale[0] / 100,
+        horizontal_alignment: settings.horizontalAlignment,
+        vertical_alignment: settings.verticalAlignment,
       };
     } else if (settings.printMode === "png") {
       if (!pngFile) {

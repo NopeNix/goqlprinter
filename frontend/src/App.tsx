@@ -98,8 +98,6 @@ function MainApp() {
     textRotation: settings.textRotation,
     svgData: settings.printMode === 'svg' ? svgData : null,
     svgScale: settings.svgScale[0] / 100,
-    svgHorizontalAlignment: settings.svgHorizontalAlignment,
-    svgVerticalAlignment: settings.svgVerticalAlignment,
     customHeightMM: settings.heightMode === "manual" ? settings.customHeightMM : 0,
     enabled: settings.printMode === 'text' || settings.printMode === 'svg',
   });
@@ -347,10 +345,10 @@ function MainApp() {
     if (settings.printMode === "svg" && svgData) {
       return (
         <TextAlignmentSelector
-          onHorizontalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_SVG_HORIZONTAL_ALIGNMENT", payload: v })}
-          onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_SVG_VERTICAL_ALIGNMENT", payload: v })}
-          horizontalValue={settings.svgHorizontalAlignment}
-          verticalValue={settings.svgVerticalAlignment}
+          onHorizontalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_HORIZONTAL_ALIGNMENT", payload: v })}
+          onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
+          horizontalValue={settings.horizontalAlignment}
+          verticalValue={settings.verticalAlignment}
           onTextRotationChange={() => {}}
           textRotationValue={0}
           onOrientationChange={() => {}}
@@ -451,8 +449,6 @@ function MainApp() {
           verticalAlignment={settings.verticalAlignment}
           textRotation={settings.textRotation}
           svgScale={settings.svgScale[0] / 100}
-          svgHorizontalAlignment={settings.svgHorizontalAlignment}
-          svgVerticalAlignment={settings.svgVerticalAlignment}
           previewUrl={(settings.printMode === 'text' || settings.printMode === 'svg') ? previewUrl : null}
           customHeightMM={settings.customHeightMM}
           heightMode={settings.heightMode}
