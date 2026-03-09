@@ -1,11 +1,12 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { printerApi } from '../api/endpoints';
+import { FILE_PRINTER } from '../constants';
 
 export interface PrinterInfo {
   id: string;
   name: string;
 }
 
-export const FILE_PRINTER = { id: "file", name: "Print to File (debug)" };
 export const STORAGE_KEY = "selectedPrinter";
 export const PRINTER_NAME_KEY = "selectedPrinterName";
 
@@ -51,12 +52,8 @@ export const usePrinterRecovery = () => {
 
   const checkPrinterAvailable = useCallback(async (printerId: string): Promise<boolean> => {
     try {
-      const response = await fetch('/api/printers');
-      if (!response.ok) return false;
-      
-      const data = await response.json();
+      const data = await printerApi.list();
       const printersList = data.printers || [];
-      
       return printersList.some((p: PrinterInfo) => p.id === printerId);
     } catch {
       return false;
@@ -82,13 +79,7 @@ export const usePrinterRecovery = () => {
       }
 
       // Get available printers first to check by both ID and name
-      const response = await fetch('/api/printers');
-      if (!response.ok) {
-        setIsRecovering(false);
-        return false;
-      }
-      
-      const data = await response.json();
+      const data = await printerApi.list();
       const printersList = data.printers || [];
       
       // First try to find by exact ID
@@ -196,11 +187,11 @@ export const usePrinterRecovery = () => {
   }, [clearRecoveryTimeout, attemptPrinterRecovery, lastError]);
 
   // Cleanup on unmount
-  useState(() => {
+  useEffect(() => {
     return () => {
       clearRecoveryTimeout();
     };
-  });
+  }, [clearRecoveryTimeout]);
 
   return {
     isRecovering,

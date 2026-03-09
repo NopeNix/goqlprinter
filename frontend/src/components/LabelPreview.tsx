@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
+import DOMPurify from "dompurify";
+import { DOTS_PER_MM } from "../constants";
 
 interface LabelPreviewProps {
   labelText: string;
@@ -27,7 +29,15 @@ interface LabelPreviewProps {
 }
 
 const PREVIEW_SCALE_FACTOR = 4; // Scales mm to pixels for the outer container
-const DOTS_PER_MM = 11.81; // 300 DPI / 25.4 mm/inch
+
+const contentWrapperStyle: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  transformOrigin: 'center',
+};
 
 const LabelPreview: React.FC<LabelPreviewProps> = ({
   labelText,
@@ -54,6 +64,22 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
   heightMode = "auto",
 }) => {
   const [isFontAvailable, setIsFontAvailable] = useState(true);
+
+  // Manage Object URL lifecycle for PNG preview to avoid memory leaks
+  const pngObjectUrl = useMemo(() => {
+    if (pngData) {
+      return URL.createObjectURL(pngData);
+    }
+    return null;
+  }, [pngData]);
+
+  useEffect(() => {
+    return () => {
+      if (pngObjectUrl) {
+        URL.revokeObjectURL(pngObjectUrl);
+      }
+    };
+  }, [pngObjectUrl]);
 
   useEffect(() => {
     if (selectedFont) {
@@ -128,7 +154,7 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     ? customHeightMM.toFixed(1)
     : (printableLabelHeight / DOTS_PER_MM).toFixed(1);
 
-  const containerStyle: React.CSSProperties = {
+  const containerStyle = useMemo<React.CSSProperties>(() => ({
     width: `${totalWidthPx}px`,
     height: `${totalHeightPx}px`,
     display: "flex",
@@ -138,25 +164,16 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     backgroundColor: "#f0f0f0",
     padding: `${marginY}px ${marginX}px`,
     boxSizing: "border-box",
-  };
+  }), [totalWidthPx, totalHeightPx, marginY, marginX]);
 
-  const printableAreaStyle: React.CSSProperties = {
+  const printableAreaStyle = useMemo<React.CSSProperties>(() => ({
     width: `${printableWidthPx}px`,
     height: `${printableHeightPx}px`,
     backgroundColor: "white",
     border: "1px solid #ccc",
     overflow: "hidden",
     position: "relative",
-  };
-
-  const contentWrapperStyle: React.CSSProperties = {
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    transformOrigin: 'center',
-  };
+  }), [printableWidthPx, printableHeightPx]);
 
   const isTextRotated = textRotation === 90 || textRotation === 270;
 
@@ -183,35 +200,35 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
   }
 
 
-  const textContainerStyle: React.CSSProperties = {
+  const textContainerStyle = useMemo<React.CSSProperties>(() => ({
     width: '100%',
     height: '100%',
     display: 'flex',
     justifyContent: flexJustify,
     alignItems: flexAlign,
-  };
+  }), [flexJustify, flexAlign]);
 
-  const textWrapperStyle: React.CSSProperties = {
+  const textWrapperStyle = useMemo<React.CSSProperties>(() => ({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     transform: `rotate(${textRotation}deg)`,
     transformOrigin: 'center',
     color: isFontAvailable ? 'black' : 'transparent', // Hide text if font not ready, but keep space
-  }
+  }), [textRotation, isFontAvailable]);
 
   // Backend uses: scaledFontSize = fontSize * 4 on printableLabelWidth canvas
   // Frontend preview must scale proportionally: fontSize * 4 * scale
   const scaledFontSize = fontSize * 4 * scale;
 
-  const textStyle: React.CSSProperties = {
+  const textStyle = useMemo<React.CSSProperties>(() => ({
     fontFamily: isFontAvailable ? selectedFont : 'sans-serif',
     fontSize: `${scaledFontSize}px`,
     lineHeight: 1,
     whiteSpace: 'pre', // Preserve newlines but don't wrap text
     maxWidth: isTextRotated ? `${printableHeightPx}px` : `${printableWidthPx}px`,
     maxHeight: isTextRotated ? `${printableWidthPx}px` : `${printableHeightPx}px`,
-  };
+  }), [isFontAvailable, selectedFont, scaledFontSize, isTextRotated, printableHeightPx, printableWidthPx]);
 
   const renderContent = () => {
     // If we have a backend preview, show it (takes priority)
@@ -232,11 +249,11 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     }
 
     // Fallback to client-side rendering
-    if (pngData) {
+    if (pngData && pngObjectUrl) {
       return (
         <div className="flex items-center justify-center w-full h-full">
           <img
-            src={URL.createObjectURL(pngData)}
+            src={pngObjectUrl}
             alt="Preview"
             style={{
               maxWidth: '100%',
@@ -296,6 +313,9 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
         .replace(/height="[^"]*"/, `height="${scaledHeight}"`)
         .replace(/viewBox="[^"]*"/, `viewBox="0 0 ${svgWidth} ${svgHeight}"`);
 
+      // Sanitize SVG to prevent XSS (strips <script> tags and event handlers)
+      const sanitizedSvg = DOMPurify.sanitize(transformedSvg, { USE_PROFILES: { svg: true } });
+
       return (
         <div
           style={{
@@ -305,7 +325,7 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
           }}
-          dangerouslySetInnerHTML={{ __html: transformedSvg }}
+          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
         />
       );
     }
@@ -318,25 +338,24 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     );
   };
 
+  // Expose printable area dimensions for parent components
+  const printableAreaLabel = `${
+    isLabelRotated
+      ? `${displayPrintableHeightMm} × ${printableWidthMm}`
+      : `${printableWidthMm} × ${displayPrintableHeightMm}`
+  } mm${isEndlessTape && heightMode === "auto" ? " (auto)" : ""}`;
+
   return (
-    <div className="flex flex-col items-center space-y-2">
+    <div className="flex flex-col items-center gap-2" data-printable-area={printableAreaLabel}>
       {!isFontAvailable && (
-        <div className="text-sm text-red-500">
-          Preview not available for this font. It will print correctly.
+        <div className="text-xs text-red-500">
+          Preview unavailable for this font. It will print correctly.
         </div>
       )}
       <div style={containerStyle}>
         <div style={printableAreaStyle}>
           <div style={contentWrapperStyle}>{renderContent()}</div>
         </div>
-      </div>
-      <div className="text-sm text-gray-500">
-        Printable Area:{" "}
-        {isLabelRotated
-          ? `${displayPrintableHeightMm} x ${printableWidthMm}`
-          : `${printableWidthMm} x ${displayPrintableHeightMm}`}{" "}
-        mm
-        {isEndlessTape && heightMode === "auto" && " (auto)"}
       </div>
     </div>
   );

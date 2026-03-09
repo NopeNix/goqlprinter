@@ -1,14 +1,34 @@
-"use client";
-
 import { useState, useEffect, useCallback } from "react";
+import { Toaster } from "../components/ui/sonner";
 import { Button } from "../components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import QRCodeGenerator from "../components/QRCodeGenerator";
-import PrinterSelector from "../components/PrinterSelector";
 import PrinterDisconnectedNotification from "../components/PrinterDisconnectedNotification";
 import LabelSizeSelector from "../components/LabelSizeSelector";
 import ModeToggle from "../components/ModeToggle";
-import usePrinterRecovery, { type PrinterInfo } from "../hooks/usePrinterRecovery";
+import PrinterStatusBar from "../components/PrinterStatusBar";
+import { usePrinterStatus } from "../hooks/usePrinterStatus";
+import { usePrintJob } from "../hooks/usePrintJob";
+import { DEFAULT_SETTINGS } from "../hooks/useLabelSettings";
+import type { LabelSettings } from "../hooks/useLabelSettings";
+import { RefreshCw } from "lucide-react";
 
 interface Settings {
   selectedPrinter: { id: string; name: string };
@@ -32,11 +52,15 @@ function loadSettings(): Settings {
 
   const saved = localStorage.getItem("qrLabelSettings");
   if (saved) {
-    const parsed = JSON.parse(saved);
-    return {
-      ...parsed,
-      settingsMode: parsed.settingsMode || "auto"
-    };
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        settingsMode: parsed.settingsMode || "auto"
+      };
+    } catch {
+      localStorage.removeItem("qrLabelSettings");
+    }
   }
   return {
     selectedPrinter: DEFAULT_PRINTER,
@@ -54,53 +78,39 @@ export default function QRLabelPage() {
   const [settings, setSettings] = useState<Settings>(loadSettings());
   const { selectedPrinter, selectedLabelSize, qrData, settingsMode = "auto" } = settings;
 
-  // Printer recovery state
-  const [printerError, setPrinterError] = useState<string | null>(null);
-  const [showPrinterDisconnected, setShowPrinterDisconnected] = useState(false);
-  
-  const {
-    isRecovering,
-    startBackgroundRecovery,
-    stopRecovery,
-    manualRetryNow
-  } = usePrinterRecovery();
-
-  const handlePrinterRecovered = useCallback((printer: PrinterInfo) => {
+  const setSelectedPrinter = useCallback((printer: { id: string; name: string }) => {
     setSettings(prev => ({ ...prev, selectedPrinter: printer }));
-    setPrinterError(null);
-    setShowPrinterDisconnected(false);
   }, []);
 
-  const handlePrinterRecoveryFailed = useCallback(() => {
-    // Recovery attempts exhausted, keep showing the notification for user action
+  const setSelectedLabelSize = useCallback((size: { id: string }) => {
+    setSettings(prev => ({ ...prev, selectedLabelSize: size.id }));
   }, []);
 
-  const handlePrinterRetry = useCallback(() => {
-    manualRetryNow(
-      (error: string) => {
-        setPrinterError(error);
-      },
-      handlePrinterRecovered
-    );
-  }, [manualRetryNow, handlePrinterRecovered]);
+  const printerState = usePrinterStatus(selectedPrinter, setSelectedPrinter, {
+    settingsMode,
+    onLabelSizeChange: setSelectedLabelSize,
+  });
 
-  const handlePrinterCancel = useCallback(() => {
-    stopRecovery();
-    setShowPrinterDisconnected(false);
-    setPrinterError(null);
-  }, [stopRecovery]);
+  // Construct a LabelSettings object for usePrintJob
+  const labelSettings: LabelSettings = {
+    ...DEFAULT_SETTINGS,
+    selectedPrinter,
+    selectedLabelSize,
+    printMode: "qr",
+    qrData,
+    settingsMode: settingsMode || "auto",
+  };
+
+  const printJob = usePrintJob({
+    settings: labelSettings,
+    svgData: null,
+    pngFile: null,
+    onPrinterRecovered: (printer) => setSettings(prev => ({ ...prev, selectedPrinter: printer })),
+  });
 
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
-
-  const setSelectedPrinter = (printer: { id: string; name: string }) => {
-    setSettings(prev => ({ ...prev, selectedPrinter: printer }));
-  };
-
-  const setSelectedLabelSize = (size: { id: string }) => {
-    setSettings(prev => ({ ...prev, selectedLabelSize: size.id }));
-  };
 
   const setSettingsMode = (mode: "auto" | "manual") => {
     setSettings(prev => ({ ...prev, settingsMode: mode }));
@@ -110,100 +120,49 @@ export default function QRLabelPage() {
     setSettings(prev => ({ ...prev, qrData: data }));
   };
 
-  const handlePrint = async () => {
-    if (!qrData) {
-      alert("Please enter QR code data");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/print_qr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          printer: selectedPrinter.id,
-          model: selectedPrinter.name,
-          label_size: selectedLabelSize,
-          data: qrData
-        }),
-      });
-
-      if (response.ok) {
-        alert("QR label printed successfully!");
-      } else {
-        const errorData = await response.json();
-        const errorMessage = errorData.error || JSON.stringify(errorData);
-        
-        // Check if it's a USB device error from API response
-        if (errorMessage.includes('USB device not found') || errorMessage.includes('device not found')) {
-          setPrinterError(errorMessage);
-          setShowPrinterDisconnected(true);
-          
-          // Start background recovery process
-          startBackgroundRecovery(
-            (error: string) => {
-              setPrinterError(error);
-            },
-            handlePrinterRecovered,
-            handlePrinterRecoveryFailed
-          );
-        } else {
-          alert(`Error: ${errorMessage}`);
-        }
-      }
-    } catch (err) {
-      console.error("Print failed:", err);
-      
-      // Check if it's a USB device error
-      const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-      if (errorMessage.includes('USB device not found') || errorMessage.includes('device not found')) {
-        setPrinterError(errorMessage);
-        setShowPrinterDisconnected(true);
-        
-        // Start background recovery process
-        startBackgroundRecovery(
-          (error: string) => {
-            setPrinterError(error);
-          },
-          handlePrinterRecovered,
-          handlePrinterRecoveryFailed
-        );
-      } else {
-        alert("Print failed - check console for details");
-      }
-    }
-  };
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
   const handleResetSettings = () => {
-    if (confirm("Reset all settings to defaults?")) {
-      setSettings({
-        selectedPrinter: DEFAULT_PRINTER,
-        selectedLabelSize: DEFAULT_LABEL_SIZE,
-        qrData: ""
-      });
-    }
+    setShowResetDialog(true);
+  };
+
+  const confirmResetSettings = () => {
+    setSettings({
+      selectedPrinter: DEFAULT_PRINTER,
+      selectedLabelSize: DEFAULT_LABEL_SIZE,
+      qrData: ""
+    });
+    setShowResetDialog(false);
   };
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
+      <Toaster richColors position="top-right" />
       {/* Printer Disconnection Notification */}
-      {showPrinterDisconnected && printerError && (
+      {printJob.showPrinterDisconnected && printJob.printerError && (
         <PrinterDisconnectedNotification
-          error={printerError}
-          onRetry={handlePrinterRetry}
-          onCancel={handlePrinterCancel}
-          isRetrying={isRecovering}
+          error={printJob.printerError}
+          onRetry={printJob.handlePrinterRetry}
+          onCancel={printJob.handlePrinterCancel}
+          isRetrying={printJob.isRecovering}
         />
       )}
-      
+
       <h1 className="text-2xl font-bold mb-6">QR Label Printer</h1>
-      
+
       <div className="space-y-6">
-        <QRCodeGenerator 
+        <QRCodeGenerator
           qrData={qrData}
           onQrDataChange={setQrData}
+        />
+
+        <PrinterStatusBar
+          printerName={selectedPrinter?.name || "No printer"}
+          labelSize={selectedLabelSize}
+          labelWidth={0}
+          labelHeight={0}
+          status={printerState.status}
+          statusDetail={printerState.statusDetail}
         />
 
         <Accordion type="single" collapsible>
@@ -212,58 +171,45 @@ export default function QRLabelPage() {
               Printer Settings
             </AccordionTrigger>
             <AccordionContent className="space-y-4 pt-4">
-              <ModeToggle 
+              <ModeToggle
                 value={settingsMode}
                 onValueChange={setSettingsMode}
               />
-              
-              <div>
-                <label className="block mb-2">Printer</label>
-                <PrinterSelector
-                  value={selectedPrinter.id}
-                  onSelectPrinter={setSelectedPrinter}
-                  onDetectLabelSize={(labelSizeId) => {
-                    if (settingsMode === "auto") {
-                      console.log("Auto-detected label size:", labelSizeId);
-                      setSettings(prev => ({ ...prev, selectedLabelSize: labelSizeId }));
-                    }
-                  }}
-                  manualOverride={settingsMode === "manual"}
-                />
-              </div>
-              
-              {/* Auto Mode Section */}
-              {settingsMode === "auto" && (
-                <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
-                  <h4 className="text-sm font-medium mb-2 text-blue-800">Auto Detection</h4>
-                  <p className="text-xs text-blue-600 mb-3">
-                    Label size is automatically detected from printer and tape.
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs mb-1">Detected Label Size</label>
-                      <div className="text-sm p-2 bg-white rounded border">
-                        {selectedLabelSize || "Detecting..."}
-                      </div>
-                    </div>
-                  </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="block mb-2 text-sm font-medium">Printer</label>
+                  <Select value={selectedPrinter?.id} onValueChange={printerState.selectPrinter}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Select printer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="file">Print to File</SelectItem>
+                      {printerState.printers.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-              
+                <button
+                  type="button"
+                  onClick={printerState.refresh}
+                  disabled={printerState.loading || printerState.refreshDebounced}
+                  className="mt-6 inline-flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-accent transition-colors disabled:opacity-50"
+                  title="Refresh printers"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${printerState.loading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+
               {/* Manual Mode Section */}
               {settingsMode === "manual" && (
-                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <h4 className="text-sm font-medium mb-2 text-gray-800">Manual Settings</h4>
-                  <p className="text-xs text-gray-600 mb-3">
-                    Manually select label size.
-                  </p>
-                  <div>
-                    <label className="block mb-2">Label Size</label>
-                    <LabelSizeSelector
-                      value={selectedLabelSize}
-                      onLabelSizeChange={setSelectedLabelSize}
-                    />
-                  </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium">Label Size</label>
+                  <LabelSizeSelector
+                    value={selectedLabelSize}
+                    onLabelSizeChange={setSelectedLabelSize}
+                  />
                 </div>
               )}
             </AccordionContent>
@@ -271,8 +217,8 @@ export default function QRLabelPage() {
         </Accordion>
 
         <div className="space-y-2">
-          <Button 
-            onClick={handlePrint}
+          <Button
+            onClick={printJob.handlePrint}
             className="w-full"
           >
             Print QR Label
@@ -286,6 +232,23 @@ export default function QRLabelPage() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Settings</AlertDialogTitle>
+            <AlertDialogDescription>
+              Reset all settings to defaults? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmResetSettings}>
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { labelApi } from '../api/endpoints';
 import {
   Select,
   SelectContent,
@@ -21,8 +22,7 @@ const LabelSizeSelector: React.FC<LabelSizeSelectorProps> = ({ value, onLabelSiz
   const [labelSizes, setLabelSizes] = useState<LabelSize[]>([]);
 
   useEffect(() => {
-    fetch('/api/label-sizes')
-      .then(response => response.json())
+    labelApi.sizes()
       .then(data => {
         const sizes: LabelSize[] = data.label_sizes;
         setLabelSizes(sizes);
@@ -44,7 +44,7 @@ const LabelSizeSelector: React.FC<LabelSizeSelectorProps> = ({ value, onLabelSiz
 
   return (
     <Select value={value} onValueChange={handleValueChange}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger className="w-full h-9 text-sm">
         <SelectValue placeholder="Select label size" />
       </SelectTrigger>
       <SelectContent>

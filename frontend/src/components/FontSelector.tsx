@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { fontApi } from '../api/endpoints';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,20 +25,21 @@ const FontSelector: React.FC<FontSelectorProps> = ({ onSelectFont }) => {
   const [fonts, setFonts] = useState<string[]>([]);
   const [selectedFont, setSelectedFont] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const onSelectFontRef = useRef(onSelectFont);
+  onSelectFontRef.current = onSelectFont;
 
   useEffect(() => {
-    fetch('/api/fonts')
-      .then(response => response.json())
+    fontApi.list()
       .then(data => {
         setFonts(data.fonts);
         if (data.fonts.length > 0) {
           const initialFont = data.fonts[0];
           setSelectedFont(initialFont);
-          onSelectFont(initialFont);
+          onSelectFontRef.current(initialFont);
         }
       })
       .catch(error => console.error('Error fetching fonts:', error));
-  }, [onSelectFont]);
+  }, []);
 
   useEffect(() => {
     fonts.forEach(font => {

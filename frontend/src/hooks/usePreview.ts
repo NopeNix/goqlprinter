@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { printApi } from '../api/endpoints';
 
 interface UsePreviewParams {
   text: string;
@@ -22,7 +23,6 @@ interface UsePreviewParams {
 
 interface UsePreviewResult {
   previewUrl: string | null;
-  previewDimensions: { width: number; height: number } | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -41,14 +41,7 @@ interface PreviewRequest {
   svg_horizontal_alignment?: string;
   svg_vertical_alignment?: string;
   custom_height_mm?: number;
-}
-
-interface PreviewResponse {
-  image: string; // "data:image/png;base64,..."
-  width: number;
-  height: number;
-  printable_width: number;
-  printable_height: number;
+  [key: string]: unknown;
 }
 
 const DEBOUNCE_DELAY = 250; // ms
@@ -81,7 +74,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
   } = params;
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewDimensions, setPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,29 +119,11 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         requestBody.svg_vertical_alignment = svgVerticalAlignment;
       }
 
-      const response = await fetch('/api/preview', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const data: PreviewResponse = await response.json();
+      const data = await printApi.preview(requestBody, signal);
 
       // Only update state if request wasn't aborted
       if (!signal.aborted) {
         setPreviewUrl(data.image);
-        setPreviewDimensions({
-          width: data.width,
-          height: data.height,
-        });
         setIsLoading(false);
       }
     } catch (err) {
@@ -162,7 +136,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch preview';
         setError(errorMessage);
         setPreviewUrl(null);
-        setPreviewDimensions(null);
         setIsLoading(false);
       }
     }
@@ -224,7 +197,6 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
 
   return {
     previewUrl,
-    previewDimensions,
     isLoading,
     error,
   };
