@@ -25,7 +25,6 @@ Brother QL-500, 550, 560, 570, 580N, 650TD, 700, 710W, 720NW, 800, 810W, 820NWB,
 - Go 1.24+
 - Node.js 18+ (frontend build)
 - [`just`](https://github.com/casey/just) (build tool)
-- `rsvg-convert` for SVG printing (`apt install librsvg2-bin`)
 - USB access permissions for direct printer communication
 
 ## Getting Started

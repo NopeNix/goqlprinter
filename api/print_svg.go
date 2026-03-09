@@ -1,17 +1,18 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
-	"image/png"
 	"net/http"
-	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 
 	"goqlprinter/brotherql"
 	"goqlprinter/internal/services"
@@ -32,32 +33,48 @@ const (
 	SVGAlignEnd    = "end"
 )
 
-// rasterizeSVG converts SVG content to a PNG image using rsvg-convert.
-// widthPx and heightPx set the target dimensions (0 means auto). scale is applied to both.
-func rasterizeSVG(ctx context.Context, svg string, widthPx, heightPx int, scale float64) (image.Image, error) {
-	args := []string{
-		"--format", "png",
-		"--background-color", "white",
-		"--keep-aspect-ratio",
+// rasterizeSVG converts SVG content to an image using pure Go (oksvg + rasterx).
+// widthPx and heightPx set the target dimensions (0 means auto from SVG viewBox). scale is applied to both.
+func rasterizeSVG(_ context.Context, svg string, widthPx, heightPx int, scale float64) (image.Image, error) {
+	icon, err := oksvg.ReadIconStream(strings.NewReader(svg))
+	if err != nil {
+		return nil, fmt.Errorf("SVG parse failed: %w", err)
 	}
 
-	if widthPx > 0 {
-		scaledWidth := int(float64(widthPx) * scale)
-		args = append(args, "--width", fmt.Sprintf("%d", scaledWidth))
+	// Determine render dimensions: use provided size or fall back to SVG's natural size
+	w := float64(widthPx)
+	h := float64(heightPx)
+	if w <= 0 {
+		w = icon.ViewBox.W
 	}
-	if heightPx > 0 {
-		scaledHeight := int(float64(heightPx) * scale)
-		args = append(args, "--height", fmt.Sprintf("%d", scaledHeight))
+	if h <= 0 {
+		h = icon.ViewBox.H
+	}
+	w *= scale
+	h *= scale
+
+	// Keep aspect ratio when only one dimension is constrained
+	if widthPx > 0 && heightPx == 0 {
+		h = w * icon.ViewBox.H / icon.ViewBox.W
+	} else if heightPx > 0 && widthPx == 0 {
+		w = h * icon.ViewBox.W / icon.ViewBox.H
 	}
 
-	cmd := exec.CommandContext(ctx, "rsvg-convert", args...)
-	cmd.Stdin = bytes.NewBufferString(svg)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("SVG rasterization failed (ensure rsvg-convert is installed and in PATH): %w", err)
+	iw, ih := int(w), int(h)
+	if iw <= 0 || ih <= 0 {
+		return nil, fmt.Errorf("SVG has zero dimensions (viewBox: %.0fx%.0f)", icon.ViewBox.W, icon.ViewBox.H)
 	}
-	return png.Decode(&out)
+
+	rgba := image.NewRGBA(image.Rect(0, 0, iw, ih))
+	// Fill white background
+	draw.Draw(rgba, rgba.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+
+	icon.SetTarget(0, 0, w, h)
+	scanner := rasterx.NewScannerGV(iw, ih, rgba, rgba.Bounds())
+	dasher := rasterx.NewDasher(iw, ih, scanner)
+	icon.Draw(dasher, 1.0)
+
+	return rgba, nil
 }
 
 func convertToGrayscale(img image.Image) *image.Gray {
