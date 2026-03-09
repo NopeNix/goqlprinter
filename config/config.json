@@ -6,11 +6,6 @@
   "app": {
     "backend": "auto",
     "default_printer": "QL-570",
-    "font_dirs": [
-      "./fonts",
-      "/usr/share/fonts/truetype",
-      "/usr/local/share/fonts",
-      "~/.fonts"
-    ]
+    "font_dirs": ["./fonts", "~/.fonts"]
   }
 }

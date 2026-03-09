@@ -1,0 +1,59 @@
+package cmd
+
+import (
+	"os"
+
+	"goqlprinter/brotherql"
+	icfg "goqlprinter/internal/config"
+	"goqlprinter/internal/logging"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	// Global state shared across subcommands.
+	Cfg             *icfg.Config
+	BackendProvider brotherql.BackendProvider
+
+	// CLI flags
+	flagPrinter string
+	flagModel   string
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "goqlprinter",
+	Short: "Brother QL label printer CLI and server",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Skip init for serve command (it does its own setup).
+		if cmd.Name() == "serve" {
+			return nil
+		}
+
+		logLevel := os.Getenv("LOG_LEVEL")
+		if logLevel == "" {
+			logLevel = "WARN"
+		}
+		logging.Init(logLevel)
+
+		cfg, err := icfg.LoadConfig()
+		if err != nil {
+			return err
+		}
+		Cfg = cfg
+
+		BackendProvider = InitBackendProvider(cfg)
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&flagPrinter, "printer", "p", "", "printer name or URI (e.g. QL-800, usb:001:005)")
+	rootCmd.PersistentFlags().StringVarP(&flagModel, "model", "m", "", "printer model override")
+}
+
+// Execute runs the root command.
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
