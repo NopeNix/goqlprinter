@@ -106,14 +106,15 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	}
 
 	// The printer expects raster data for the full physical print-head width, not just
-	// the printable area. Compositing the image onto a white canvas of the correct
-	// raster width adds the required blank margins and prevents image stretching.
+	// the printable area. The tape is physically aligned to the right edge of the
+	// print head, so the image must be right-aligned here (which becomes left-aligned
+	// after the mandatory horizontal flip), matching the tape's physical position.
 	rasterWidthPixels := model.RasterWidthBytes * 8
 	slog.Debug("Raster width", "bytes", model.RasterWidthBytes, "pixels", rasterWidthPixels)
 
 	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
 
-	offsetX := (rasterWidthPixels - bounds.Dx()) / 2
+	offsetX := rasterWidthPixels - bounds.Dx()
 	offset := image.Point{X: offsetX, Y: 0}
 	drawRect := bounds.Add(offset)
 
