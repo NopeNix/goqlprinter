@@ -48,6 +48,30 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 	statusCh := make(chan StatusResponse, 1)
 
 	if err := services.ConnectToPrinter(h.Printers, req.Printer, "", func(backend brotherql.Backend, model string) error {
+		type ReadTimeoutSetter interface {
+			SetReadTimeout(d time.Duration)
+		}
+
+		// Drain any stale data left in kernel buffer from previous operations
+		if ts, ok := backend.(ReadTimeoutSetter); ok {
+			ts.SetReadTimeout(150 * time.Millisecond)
+		}
+		drainBuf := make([]byte, 256)
+		for {
+			n, _ := backend.Read(drainBuf)
+			if n > 0 {
+				slog.Info("Drained stale bytes before status request", "n", n, "hex", fmt.Sprintf("%x", drainBuf[:n]))
+			} else {
+				break
+			}
+		}
+
+		// Restore normal read timeout for status response
+		if ts, ok := backend.(ReadTimeoutSetter); ok {
+			ts.SetReadTimeout(3 * time.Second)
+		}
+
+		// Send invalidate + status request
 		var cmdBuf []byte
 		cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...) // invalidate buffer
 		cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)                   // ESC i S: status request
@@ -56,29 +80,27 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 			return fmt.Errorf("failed to send status request: %w", err)
 		}
 
-		time.Sleep(100 * time.Millisecond)
-
+		// Read the 32-byte status response, retrying on EOF
+		// The usblp driver may return EOF if the printer hasn't
+		// prepared its response yet.
 		var allData []byte
 		tmpBuf := make([]byte, 64)
-
-		// Accumulate data until we have the 32-byte status response or time out.
-		timeout := time.Now().Add(150 * time.Millisecond)
-		for time.Now().Before(timeout) {
-			n, readErr := backend.Read(tmpBuf)
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			time.Sleep(100 * time.Millisecond)
+			n, err := backend.Read(tmpBuf)
 			if n > 0 {
 				allData = append(allData, tmpBuf[:n]...)
-				// Status response is exactly 32 bytes - stop when we have enough
-				if len(allData) >= 32 {
-					break
-				}
-			} else if readErr != nil {
 				break
 			}
-			time.Sleep(10 * time.Millisecond)
+			if err != nil && err.Error() != "EOF" {
+				return fmt.Errorf("failed to read status: %w", err)
+			}
+			// EOF = no data yet, retry
 		}
 
 		if len(allData) < 32 {
-			return fmt.Errorf("no response from printer")
+			return fmt.Errorf("no response from printer (got %d bytes)", len(allData))
 		}
 
 		status, parseErr := brotherql.ParseStatusResponse(allData[:32])
@@ -100,7 +122,11 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 
 		return nil
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get printer status: %v", err)})
+		slog.Warn("Printer status unavailable", "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   err.Error(),
+			"message": "Printer is temporarily unavailable (may be busy or disconnected)",
+		})
 		return
 	}
 
@@ -108,6 +134,9 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 	case status := <-statusCh:
 		c.JSON(http.StatusOK, status)
 	case <-time.After(1 * time.Second):
-		c.JSON(http.StatusGatewayTimeout, gin.H{"error": "Timeout waiting for printer status"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "timeout waiting for printer response",
+			"message": "Printer did not respond in time",
+		})
 	}
 }

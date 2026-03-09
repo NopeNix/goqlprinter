@@ -197,9 +197,16 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
         body: JSON.stringify({ printer: value }),
       });
 
-      if (!response.ok) throw new Error('Failed to fetch status');
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        const message = data?.message || 'Printer status unavailable';
+        setLabelStatus(null);
+        setError(response.status === 503 ? message : `Status error: ${message}`);
+        return;
+      }
 
       const data: PrinterStatusResponse = await response.json();
+      setError(null);
       setLabelStatus(data.status);
 
       // Auto-detect label size from printer status
@@ -209,8 +216,10 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
           onDetectLabelSize(detectedLabelId);
         }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+    } catch {
+      // Network error - printer server not reachable
+      setLabelStatus(null);
+      setError('Cannot reach printer service');
     }
   }, [value, onDetectLabelSize, manualOverride]);
 
@@ -337,7 +346,7 @@ const PrinterSelector: React.FC<PrinterSelectorProps> = ({ value, onSelectPrinte
   return (
     <div className="space-y-4">
       {error && (
-        <Alert variant="destructive">
+        <Alert variant={error.startsWith('Printer is') || error.startsWith('Printer did') ? "default" : "destructive"}>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
