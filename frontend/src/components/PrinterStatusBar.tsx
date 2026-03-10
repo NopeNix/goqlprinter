@@ -1,4 +1,4 @@
-import { Printer, Wifi, WifiOff, AlertCircle, ChevronDown } from "lucide-react";
+import { Printer, Wifi, WifiOff, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
 
 export type PrinterStatusKind = "ready" | "busy" | "error" | "offline" | "file";
 
@@ -11,6 +11,9 @@ interface PrinterStatusBarProps {
   statusDetail?: string;
   expanded?: boolean;
   onClick?: () => void;
+  onRefresh?: () => void;
+  refreshLoading?: boolean;
+  refreshDebounced?: boolean;
 }
 
 function formatLabelSize(width: number, height: number): string {
@@ -64,6 +67,9 @@ export default function PrinterStatusBar({
   statusDetail,
   expanded = false,
   onClick,
+  onRefresh,
+  refreshLoading = false,
+  refreshDebounced = false,
 }: PrinterStatusBarProps) {
   const cfg = statusConfig[status];
   const pillLabel = statusDetail || cfg.label;
@@ -75,7 +81,7 @@ export default function PrinterStatusBar({
       }`}
       onClick={onClick}
     >
-      <div className="container flex items-center h-12 px-4 gap-3">
+      <div className="container flex items-center h-14 px-4 gap-3">
         {/* App title */}
         <h1 className="text-sm font-semibold tracking-tight whitespace-nowrap">
           QL Label Designer
@@ -96,8 +102,22 @@ export default function PrinterStatusBar({
           </span>
         </div>
 
-        {/* Status + expand indicator */}
+        {/* Refresh + Status + expand indicator */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRefresh();
+              }}
+              disabled={refreshLoading || refreshDebounced}
+              className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+              title="Refresh printers"
+            >
+              <RefreshCw className={`h-3 w-3 text-muted-foreground ${refreshLoading ? "animate-spin" : ""}`} />
+            </button>
+          )}
           <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${cfg.className}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotClassName}`} />
             {pillLabel}

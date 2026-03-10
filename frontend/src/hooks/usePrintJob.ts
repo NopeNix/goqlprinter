@@ -131,7 +131,13 @@ export function usePrintJob({
         return;
       }
       endpoint = "/api/print_qr";
-      payload = { ...payload, data: settings.qrData };
+      payload = {
+        ...payload,
+        data: settings.qrData,
+        qr_scale: settings.qrScale[0] / 100,
+        horizontal_alignment: settings.horizontalAlignment,
+        vertical_alignment: settings.verticalAlignment,
+      };
     } else if (settings.printMode === "svg") {
       if (!svgData) {
         toast.error("Please load an SVG file.");

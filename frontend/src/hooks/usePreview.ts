@@ -13,6 +13,9 @@ interface UsePreviewParams {
   // SVG optional
   svgData?: string | null;
   svgScale?: number;
+  // QR optional
+  qrData?: string;
+  qrScale?: number;
   // Endless tape custom height
   customHeightMM?: number;
   // Control
@@ -36,6 +39,8 @@ interface PreviewRequest {
   text_rotation: number;
   svg_data?: string;
   svg_scale?: number;
+  qr_data?: string;
+  qr_scale?: number;
   custom_height_mm?: number;
   [key: string]: unknown;
 }
@@ -63,6 +68,8 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     textRotation,
     svgData,
     svgScale,
+    qrData,
+    qrScale,
     customHeightMM,
     enabled = true,
   } = params;
@@ -107,6 +114,14 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         requestBody.svg_scale = svgScale;
       }
 
+      // Add QR fields if present
+      if (qrData) {
+        requestBody.qr_data = qrData;
+      }
+      if (qrScale !== undefined) {
+        requestBody.qr_scale = qrScale;
+      }
+
       const data = await printApi.preview(requestBody, signal);
 
       // Only update state if request wasn't aborted
@@ -138,6 +153,8 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     textRotation,
     svgData,
     svgScale,
+    qrData,
+    qrScale,
     customHeightMM,
   ]);
 

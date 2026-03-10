@@ -35,6 +35,7 @@ export interface LabelSettings {
   selectedFont: string;
   fontSize: number[];
   qrData: string;
+  qrScale: number[];
   svgScale: number[];
 
   // Alignment
@@ -59,6 +60,7 @@ export type LabelSettingsAction =
   | { type: "SET_FONT"; payload: string }
   | { type: "SET_FONT_SIZE"; payload: number[] }
   | { type: "SET_QR_DATA"; payload: string }
+  | { type: "SET_QR_SCALE"; payload: number[] }
   | { type: "SET_SVG_SCALE"; payload: number[] }
   | { type: "SET_HORIZONTAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_VERTICAL_ALIGNMENT"; payload: "start" | "center" | "end" }
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: LabelSettings = {
   selectedFont: "",
   fontSize: [20],
   qrData: "",
+  qrScale: [100],
   svgScale: [100],
   horizontalAlignment: "center",
   verticalAlignment: "center",
@@ -122,6 +125,7 @@ function migrateFromOldFormat(saved: Record<string, unknown>): LabelSettings {
       selectedFont: (saved.selectedFont as string) ?? DEFAULT_SETTINGS.selectedFont,
       fontSize: (saved.fontSize as number[]) || DEFAULT_SETTINGS.fontSize,
       qrData: (saved.qrData as string) ?? DEFAULT_SETTINGS.qrData,
+      qrScale: (saved.qrScale as number[]) || DEFAULT_SETTINGS.qrScale,
       svgScale: (saved.svgScale as number[]) || DEFAULT_SETTINGS.svgScale,
       horizontalAlignment:
         (saved.horizontalAlignment as "start" | "center" | "end") ||
@@ -177,6 +181,8 @@ function labelSettingsReducer(
       return { ...state, fontSize: action.payload };
     case "SET_QR_DATA":
       return { ...state, qrData: action.payload };
+    case "SET_QR_SCALE":
+      return { ...state, qrScale: action.payload };
     case "SET_SVG_SCALE":
       return { ...state, svgScale: action.payload };
     case "SET_HORIZONTAL_ALIGNMENT":

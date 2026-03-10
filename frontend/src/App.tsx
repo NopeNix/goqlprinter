@@ -98,8 +98,10 @@ function MainApp() {
     textRotation: settings.textRotation,
     svgData: settings.printMode === 'svg' ? svgData : null,
     svgScale: settings.svgScale[0] / 100,
+    qrData: settings.printMode === 'qr' ? settings.qrData : undefined,
+    qrScale: settings.qrScale[0] / 100,
     customHeightMM: settings.heightMode === "manual" ? settings.customHeightMM : 0,
-    enabled: settings.printMode === 'text' || settings.printMode === 'svg',
+    enabled: settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr',
   });
 
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -205,7 +207,7 @@ function MainApp() {
           </>
         );
       case "qr":
-        return <QRCodeGenerator qrData={settings.qrData} onQrDataChange={(v: string) => dispatch({ type: "SET_QR_DATA", payload: v })} />;
+        return <QRCodeGenerator qrData={settings.qrData} onQrDataChange={(v: string) => dispatch({ type: "SET_QR_DATA", payload: v })} qrScale={settings.qrScale} onQrScaleChange={(v) => dispatch({ type: "SET_QR_SCALE", payload: v })} />;
       case "svg":
         return (
           <div className="space-y-4">
@@ -356,6 +358,20 @@ function MainApp() {
         />
       );
     }
+    if (settings.printMode === "qr" && settings.qrData) {
+      return (
+        <TextAlignmentSelector
+          onHorizontalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_HORIZONTAL_ALIGNMENT", payload: v })}
+          onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
+          horizontalValue={settings.horizontalAlignment}
+          verticalValue={settings.verticalAlignment}
+          onTextRotationChange={() => {}}
+          textRotationValue={0}
+          onOrientationChange={() => {}}
+          orientationValue={"standard"}
+        />
+      );
+    }
     return null;
   };
 
@@ -449,7 +465,7 @@ function MainApp() {
           verticalAlignment={settings.verticalAlignment}
           textRotation={settings.textRotation}
           svgScale={settings.svgScale[0] / 100}
-          previewUrl={(settings.printMode === 'text' || settings.printMode === 'svg') ? previewUrl : null}
+          previewUrl={(settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr') ? previewUrl : null}
           customHeightMM={settings.customHeightMM}
           heightMode={settings.heightMode}
         />
@@ -468,6 +484,9 @@ function MainApp() {
         statusDetail={printerState.statusDetail}
         expanded={showAdvancedSettings}
         onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+        onRefresh={printerState.refresh}
+        refreshLoading={printerState.loading}
+        refreshDebounced={printerState.refreshDebounced}
       />
       <main className="container flex-1 px-4 py-6 pb-20 md:pb-0">
         {/* Printer Disconnection Notification */}
