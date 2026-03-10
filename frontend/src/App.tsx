@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
 
+import { RotateCw } from "lucide-react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import QRLabelPage from "./pages/QRLabelPage";
 import { labelApi } from "./api/endpoints";
@@ -71,6 +72,13 @@ function MainApp() {
             printableLabelHeight: data.dots_printable_height,
           },
         },
+      });
+      // Auto-select orientation: die-cut labels taller than wide → rotated
+      const isDieCut = data.tape_size_height > 0;
+      const isTallerThanWide = data.tape_size_height > data.tape_size_width;
+      dispatch({
+        type: "SET_ORIENTATION",
+        payload: (isDieCut && isTallerThanWide) ? "rotated" : "standard",
       });
     });
   }, [dispatch]);
@@ -273,6 +281,12 @@ function MainApp() {
   );
 
   const isLabelRotated = settings.selectedOrientation === "rotated";
+  // Determine if the label is currently displayed in landscape (wider than tall)
+  const { labelWidth, labelHeight } = settings.dimensions;
+  const isEndlessTapeLabel = labelHeight === 0;
+  const displayedWidth = isLabelRotated ? (isEndlessTapeLabel ? labelWidth : labelHeight) : labelWidth;
+  const displayedHeight = isLabelRotated ? labelWidth : (isEndlessTapeLabel ? labelWidth : labelHeight);
+  const isLandscape = displayedWidth > displayedHeight || isEndlessTapeLabel;
   const printableWidthMm = (settings.dimensions.printableLabelWidth / DOTS_PER_MM).toFixed(1);
   const displayHeightMm = (settings.heightMode === "manual" && settings.customHeightMM > 0)
     ? settings.customHeightMM.toFixed(1)
@@ -433,6 +447,15 @@ function MainApp() {
         ) : (
           <span className="text-xs text-muted-foreground">{printableAreaLabel}</span>
         )}
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "SET_ORIENTATION", payload: isLabelRotated ? "standard" : "rotated" })}
+          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors cursor-pointer bg-muted border-border hover:bg-accent hover:border-accent-foreground/20 text-muted-foreground"
+          title={isLandscape ? "Landscape — click to switch to portrait" : "Portrait — click to switch to landscape"}
+        >
+          <RotateCw className="h-3 w-3" />
+          {isLandscape ? "Landscape" : "Portrait"}
+        </button>
         {previewLoading && (
           <span className="text-xs text-blue-600 ml-auto">Loading...</span>
         )}
@@ -512,6 +535,8 @@ function MainApp() {
             onLabelSizeChange={handleLabelSizeChange}
             selectedOrientation={settings.selectedOrientation}
             onOrientationChange={(v: string) => dispatch({ type: "SET_ORIENTATION", payload: v })}
+            labelWidth={settings.dimensions.labelWidth}
+            labelHeight={settings.dimensions.labelHeight}
             printMode={settings.printMode}
             onResetSettings={handleResetSettings}
             loading={printerState.loading}

@@ -21,6 +21,8 @@ interface AdvancedSettingsPanelProps {
   onLabelSizeChange: (size: { id: string }) => void;
   selectedOrientation: string;
   onOrientationChange: (value: string) => void;
+  labelWidth: number;
+  labelHeight: number;
   printMode: string;
   onResetSettings: () => void;
   loading: boolean;
@@ -38,6 +40,8 @@ const AdvancedSettingsPanel: React.FC<AdvancedSettingsPanelProps> = ({
   onLabelSizeChange,
   selectedOrientation,
   onOrientationChange,
+  labelWidth,
+  labelHeight,
   printMode,
   onResetSettings,
   loading,
@@ -45,6 +49,14 @@ const AdvancedSettingsPanel: React.FC<AdvancedSettingsPanelProps> = ({
   onRefresh,
 }) => {
   const isManual = settingsMode === "manual";
+
+  // Compute which internal value maps to landscape/portrait for this label
+  const isEndlessTape = labelHeight === 0;
+  const isTallerThanWide = labelHeight > labelWidth && labelHeight > 0;
+  // For labels taller than wide (e.g. 29x90): "rotated" = landscape, "standard" = portrait
+  // For labels wider than tall (e.g. 62x29): "standard" = landscape, "rotated" = portrait
+  const landscapeValue = isTallerThanWide ? "rotated" : "standard";
+  const portraitValue = isTallerThanWide ? "standard" : "rotated";
 
   return (
     <div className="space-y-3 my-4">
@@ -111,14 +123,14 @@ const AdvancedSettingsPanel: React.FC<AdvancedSettingsPanelProps> = ({
             <Select
               value={selectedOrientation}
               onValueChange={onOrientationChange}
-              disabled={printMode === "qr"}
+              disabled={printMode === "qr" || isEndlessTape}
             >
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Orientation" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="standard">Standard</SelectItem>
-                <SelectItem value="rotated">Rotated</SelectItem>
+                <SelectItem value={landscapeValue}>Landscape</SelectItem>
+                <SelectItem value={portraitValue}>Portrait</SelectItem>
               </SelectContent>
             </Select>
           </>
