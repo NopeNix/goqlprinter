@@ -1,6 +1,6 @@
 # goqlprinter
 
-Web-based label printing interface for Brother QL thermal printers. Provides a React frontend and Go backend with a REST API for printing text, QR codes, SVG, and PNG labels.
+Lightweight web UI and REST API for Brother QL label printers. Turn any QL printer into a network printer, automate label printing from scripts, or just print labels faster than P-touch Editor. Single binary, no dependencies.
 
 ![Brother QL series](https://img.shields.io/badge/Brother-QL_series-blue)
 ![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)
@@ -8,14 +8,15 @@ Web-based label printing interface for Brother QL thermal printers. Provides a R
 
 ## Features
 
-- Print text labels with font and alignment control
-- Multiline text with per-line alignment
-- Generate and print QR codes
-- Print SVG and PNG images
-- Live label preview before printing
+- Web UI with live preview — print from any device on the network
+- CLI for scripting and automation
+- REST API for integration with other tools
+- Text labels with font/alignment control, multiline support
+- QR code generation and printing
+- SVG and PNG image printing
 - Auto-discovers connected Brother QL printers
 - 20+ label sizes (endless tape, die-cut, round)
-- CLI interface alongside the web UI
+- Single binary with embedded frontend — no external dependencies
 
 ![goqlprinter screenshot](docs/screenshot.png)
 
@@ -133,6 +134,18 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="04f9", MODE="0666"
 ```
 
 Save to `/etc/udev/rules.d/50-brother-ql.rules` and reload: `sudo udevadm control --reload-rules`
+
+## macOS
+
+The native build works if you have the Brother P-touch driver installed (available on the App Store). For driverless operation, use the **USB build** which communicates directly with the printer:
+
+```bash
+brew install libusb
+just build-darwin-usb
+sudo ./dist/darwin-usb-arm64/goqlprinter serve
+```
+
+Root access (`sudo`) is required because macOS restricts direct USB device access.
 
 ## Windows
 
