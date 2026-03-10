@@ -331,10 +331,12 @@ function MainApp() {
           onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
           horizontalValue={settings.horizontalAlignment}
           verticalValue={settings.verticalAlignment}
-          onTextRotationChange={() => {}}
-          textRotationValue={0}
-          onOrientationChange={() => {}}
-          orientationValue={"standard"}
+          onTextRotationChange={(v: number) => dispatch({ type: "SET_TEXT_ROTATION", payload: v })}
+          textRotationValue={settings.textRotation}
+          onOrientationChange={
+            ((value: "standard" | "rotated") => dispatch({ type: "SET_ORIENTATION", payload: value })) as (value: "standard" | "rotated") => void
+          }
+          orientationValue={settings.selectedOrientation as "standard" | "rotated"}
         />
       );
     }
@@ -345,10 +347,12 @@ function MainApp() {
           onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
           horizontalValue={settings.horizontalAlignment}
           verticalValue={settings.verticalAlignment}
-          onTextRotationChange={() => {}}
-          textRotationValue={0}
-          onOrientationChange={() => {}}
-          orientationValue={"standard"}
+          onTextRotationChange={(v: number) => dispatch({ type: "SET_TEXT_ROTATION", payload: v })}
+          textRotationValue={settings.textRotation}
+          onOrientationChange={
+            ((value: "standard" | "rotated") => dispatch({ type: "SET_ORIENTATION", payload: value })) as (value: "standard" | "rotated") => void
+          }
+          orientationValue={settings.selectedOrientation as "standard" | "rotated"}
         />
       );
     }
@@ -359,10 +363,12 @@ function MainApp() {
           onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
           horizontalValue={settings.horizontalAlignment}
           verticalValue={settings.verticalAlignment}
-          onTextRotationChange={() => {}}
-          textRotationValue={0}
-          onOrientationChange={() => {}}
-          orientationValue={"standard"}
+          onTextRotationChange={(v: number) => dispatch({ type: "SET_TEXT_ROTATION", payload: v })}
+          textRotationValue={settings.textRotation}
+          onOrientationChange={
+            ((value: "standard" | "rotated") => dispatch({ type: "SET_ORIENTATION", payload: value })) as (value: "standard" | "rotated") => void
+          }
+          orientationValue={settings.selectedOrientation as "standard" | "rotated"}
         />
       );
     }

@@ -86,7 +86,8 @@ def analyze_file(fname: str) -> str:
 
 def print_svg(svg_data: str, label_size: str, h_align: str = "center",
               v_align: str = "center", scale: float = 1.0,
-              custom_height_mm: float = 0, endpoint: str = "/api/print") -> dict:
+              custom_height_mm: float = 0, endpoint: str = "/api/print",
+              orientation: str = "standard", content_rotation: float = 0) -> dict:
     """Print an SVG label to file and return dict with filename + raster_file."""
     payload = {
         "svg_data": svg_data,
@@ -94,8 +95,10 @@ def print_svg(svg_data: str, label_size: str, h_align: str = "center",
         "printer": "file",
         "model": "QL-820NWB",
         "svg_scale": scale,
-        "svg_horizontal_alignment": h_align,
-        "svg_vertical_alignment": v_align,
+        "horizontal_alignment": h_align,
+        "vertical_alignment": v_align,
+        "orientation": orientation,
+        "content_rotation": content_rotation,
     }
     if custom_height_mm > 0:
         payload["custom_height_mm"] = custom_height_mm
@@ -107,14 +110,15 @@ def print_svg(svg_data: str, label_size: str, h_align: str = "center",
 
 def preview_svg(svg_data: str, label_size: str, h_align: str = "center",
                 v_align: str = "center", scale: float = 1.0,
-                custom_height_mm: float = 0) -> dict:
+                custom_height_mm: float = 0, orientation: str = "standard") -> dict:
     """Get a preview for comparison. Returns width, height, and image data."""
     payload = {
         "svg_data": svg_data,
         "label_size": label_size,
         "svg_scale": scale,
-        "svg_horizontal_alignment": h_align,
-        "svg_vertical_alignment": v_align,
+        "horizontal_alignment": h_align,
+        "vertical_alignment": v_align,
+        "orientation": orientation,
     }
     if custom_height_mm > 0:
         payload["custom_height_mm"] = custom_height_mm
@@ -434,6 +438,116 @@ def test_raster_tape_centering() -> list[str]:
     return errors
 
 
+def test_rotated_orientation() -> list[str]:
+    """Test that rotated orientation produces correctly rotated output."""
+    errors = []
+    print("\n--- SVG Rotated Orientation Test ---")
+
+    for label_size in LABEL_SIZES:
+        label_desc = f"continuous {label_size}mm" if "x" not in label_size else f"die-cut {label_size}"
+        print(f"\n  Label: {label_desc}")
+
+        for orient in ["standard", "rotated"]:
+            time.sleep(1.1)
+            try:
+                out = print_svg(SVG_RECT, label_size, orientation=orient)
+                img = Image.open(out["filename"])
+                w, h = img.size
+                info = analyze_file(out["filename"])
+                print(f"    orient={orient:8s}  {info}")
+
+                # Also check preview dimensions
+                prev = preview_svg(SVG_RECT, label_size, orientation=orient)
+                prev_w = prev.get("width", 0)
+                prev_h = prev.get("height", 0)
+                match = "OK" if (prev_w == w and prev_h == h) else "MISMATCH"
+                print(f"    {'':14s}  preview={prev_w}x{prev_h}  file={w}x{h}  {match}")
+                if match == "MISMATCH":
+                    errors.append(f"[rotated {label_desc}] {orient}: preview={prev_w}x{prev_h} file={w}x{h}")
+            except Exception as e:
+                errors.append(f"[rotated {label_desc}] {orient}: {e}")
+                print(f"    orient={orient:8s}  FAILED: {e}")
+
+    return errors
+
+
+def test_rotated_scaling() -> list[str]:
+    """Test that scaling works correctly with rotated orientation."""
+    errors = []
+    label_size = "62x29"
+    print(f"\n--- SVG Rotated Scaling Test (die-cut {label_size}) ---")
+
+    for orient in ["standard", "rotated"]:
+        print(f"\n  Orientation: {orient}")
+        results = {}
+        for scale in SCALES:
+            time.sleep(1.1)
+            try:
+                out = print_svg(SVG_RECT, label_size, scale=scale, orientation=orient)
+                info = analyze_file(out["filename"])
+                bbox = dark_bbox(out["filename"])
+                results[scale] = bbox
+                img = Image.open(out["filename"])
+                print(f"    scale={scale:.1f}  img={img.size[0]}x{img.size[1]}  {info}")
+            except Exception as e:
+                errors.append(f"[rotated-scaling {orient}] scale={scale}: {e}")
+                print(f"    scale={scale:.1f}  FAILED: {e}")
+
+        if len(results) >= 2 and all(results.values()):
+            widths = {k: v[2] - v[0] for k, v in results.items()}
+            sorted_w = sorted(widths.items())
+            if sorted_w[0][1] < sorted_w[-1][1]:
+                print(f"    OK: Content width grows ({sorted_w[0][1]}px -> {sorted_w[-1][1]}px)")
+            else:
+                errors.append(f"[rotated-scaling {orient}] Content width did not increase with scale")
+                print(f"    FAIL: Content width didn't grow: {widths}")
+
+    return errors
+
+
+def test_rotated_dimensions() -> list[str]:
+    """Test that rotated die-cut labels have swapped canvas dimensions.
+
+    For a die-cut 62x29:
+      standard: width=printHeadDots(696), height=tapeLengthDots(271) — landscape
+      rotated:  width=tapeLengthDots(271), height=printHeadDots(696) — portrait
+    The raster (for printer) should be rotated back to landscape.
+    """
+    errors = []
+    label_size = "62x29"
+    print(f"\n--- SVG Rotated Dimensions Test (die-cut {label_size}) ---")
+
+    dims = {}
+    raster_dims = {}
+    for orient in ["standard", "rotated"]:
+        time.sleep(1.1)
+        try:
+            out = print_svg(SVG_RECT, label_size, orientation=orient)
+            img = Image.open(out["filename"])
+            dims[orient] = img.size
+            line = f"    orient={orient:8s}  label={img.size[0]}x{img.size[1]}"
+            if out["raster_file"] and os.path.exists(out["raster_file"]):
+                r_img = Image.open(out["raster_file"])
+                raster_dims[orient] = r_img.size
+                line += f"  raster={r_img.size[0]}x{r_img.size[1]}"
+            print(line)
+        except Exception as e:
+            errors.append(f"[rotated-dims] {orient}: {e}")
+            print(f"    orient={orient:8s}  FAILED: {e}")
+
+    if len(dims) == 2:
+        sw, sh = dims["standard"]
+        rw, rh = dims["rotated"]
+        # Standard is landscape (wide), rotated is portrait (tall)
+        if sw > sh and rw < rh:
+            print(f"    OK: standard=landscape({sw}x{sh}) rotated=portrait({rw}x{rh})")
+        else:
+            errors.append(f"[rotated-dims] Expected landscape vs portrait: standard={sw}x{sh} rotated={rw}x{rh}")
+            print(f"    FAIL: standard={sw}x{sh} rotated={rw}x{rh}")
+
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description="Test SVG label printing alignment and scaling")
     parser.add_argument("--base-url", default=CONFIG["base_url"], help="Backend server URL")
@@ -451,6 +565,9 @@ def main():
     all_errors.extend(test_horizontal_alignment())
     all_errors.extend(test_vertical_alignment())
     all_errors.extend(test_scaling())
+    all_errors.extend(test_rotated_orientation())
+    all_errors.extend(test_rotated_scaling())
+    all_errors.extend(test_rotated_dimensions())
     all_errors.extend(test_preview_vs_print())
     all_errors.extend(test_endpoints_consistency())
     all_errors.extend(test_custom_height())

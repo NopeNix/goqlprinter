@@ -99,7 +99,16 @@ func prepareRaster(img image.Image, model PrinterModel) *image.Gray {
 
 	fullWidthImg := CreateBlankImage(rasterWidthPixels, height)
 
-	draw.Draw(fullWidthImg, bounds, img, bounds.Min, draw.Src)
+	// Right-align the image within the full raster width so that after the
+	// mandatory horizontal flip the content lands on the left side of the
+	// raster — which is where the Brother printhead physically meets the tape.
+	// For wide labels (e.g. 62mm ≈ 696px on 720px raster) the offset is tiny;
+	// for narrow labels (e.g. 29mm ≈ 306px) mis-alignment would place the
+	// content entirely outside the tape area, producing a blank print.
+	imgWidth := bounds.Dx()
+	offset := rasterWidthPixels - imgWidth
+	dstRect := image.Rect(offset, 0, offset+imgWidth, height)
+	draw.Draw(fullWidthImg, dstRect, img, bounds.Min, draw.Src)
 
 	// The protocol requires raster data to be mirrored horizontally.
 	return flipImageHorizontally(fullWidthImg)
@@ -136,6 +145,28 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 	}
 
 	flippedImg := prepareRaster(img, model)
+
+	slog.Debug("Flipped image dimensions", "width", flippedImg.Bounds().Dx(), "height", flippedImg.Bounds().Dy())
+	{
+		bounds := flippedImg.Bounds()
+		blackPixels := 0
+		rowsToCheck := 10
+		for pass := range 2 {
+			startY, endY := bounds.Min.Y, bounds.Min.Y+rowsToCheck
+			if pass == 1 {
+				startY = max(bounds.Max.Y-rowsToCheck, bounds.Min.Y)
+				endY = bounds.Max.Y
+			}
+			for y := startY; y < endY; y++ {
+				for x := bounds.Min.X; x < bounds.Max.X; x++ {
+					if flippedImg.GrayAt(x, y).Y < 250 {
+						blackPixels++
+					}
+				}
+			}
+		}
+		slog.Debug("Flipped image pixel sample (first+last 10 rows)", "black_pixels", blackPixels)
+	}
 
 	// Phase 1: build the command stream.
 	cmdBuf, err := p.buildCommandStream(flippedImg, label, model, img.Bounds().Max.Y)
@@ -183,6 +214,33 @@ func (p *BrotherQL) buildCommandStream(flippedImg *image.Gray, label LabelSize, 
 	rasterWidthPixels := model.RasterWidthBytes * 8
 	rasterData := p.rasterize(flippedImg, model.RasterWidthBytes, rasterWidthPixels)
 	slog.Debug("Rasterized rows of data", "rows", len(rasterData))
+	{
+		nonEmptyRows := 0
+		firstNonEmptyHex := ""
+		for _, row := range rasterData {
+			hasData := false
+			for _, b := range row {
+				if b != 0 {
+					hasData = true
+					break
+				}
+			}
+			if hasData {
+				nonEmptyRows++
+				if firstNonEmptyHex == "" {
+					// Collect only the non-zero bytes for brevity.
+					var nonZero []byte
+					for _, b := range row {
+						if b != 0 {
+							nonZero = append(nonZero, b)
+						}
+					}
+					firstNonEmptyHex = fmt.Sprintf("%x", nonZero)
+				}
+			}
+		}
+		slog.Debug("Raster data summary", "total_rows", len(rasterData), "non_empty_rows", nonEmptyRows, "first_non_empty_row_nonzero_hex", firstNonEmptyHex)
+	}
 
 	var buf bytes.Buffer
 
@@ -218,6 +276,7 @@ func (p *BrotherQL) buildCommandStream(flippedImg *image.Gray, label LabelSize, 
 
 	binary.LittleEndian.PutUint32(payload[4:8], uint32(height)) // image height in pixels
 	slog.Debug("Print height", "pixels", height)
+	slog.Debug("ESC i z media settings", "flags_hex", fmt.Sprintf("0x%02x", flags), "is_die_cut", isDieCut, "payload_hex", fmt.Sprintf("%x", payload))
 	buf.Write(payload)
 
 	// ESC i d: set feed margin using label-specific value.

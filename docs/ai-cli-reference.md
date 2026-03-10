@@ -1,15 +1,30 @@
 # API & CLI Reference
 
-## Build Commands
+## Build Commands (justfile)
 
 | Command | Purpose |
 |---------|---------|
-| `go run main.go` | Dev server on :8000 |
-| `make build-linux-native` | Linux, CGO=0, pure Go |
-| `make build-linux-usb` | Linux, CGO=1, gousb |
-| `make build-windows-usb` | Windows cross-compile (mingw) |
-| `make build-darwin-native` | macOS arm64+amd64 |
-| `make build-all` | All platform targets |
+| `just serve` / `go run main.go` | Dev server on :8000 |
+| `just build` | Build for current platform |
+| `just build-frontend` | Bundle React frontend |
+| `just build-linux-native` | Linux, CGO=0, pure Go |
+| `just build-linux-usb` | Linux, CGO=1, gousb |
+| `just build-windows-usb` | Windows cross-compile (mingw) |
+| `just build-darwin-native` | macOS arm64+amd64 |
+| `just build-all` | All platform targets |
+| `just dev` | Concurrent Go + Vite dev server |
+| `just package` | Create .tar.gz archives |
+
+## CLI Commands (Cobra)
+
+| Command | Purpose |
+|---------|---------|
+| `goqlprinter serve` | Start web server |
+| `goqlprinter print` | Print from CLI |
+| `goqlprinter printers` | List printers |
+| `goqlprinter labels` | List label sizes |
+| `goqlprinter fonts` | List fonts |
+| `goqlprinter status` | Printer status |
 
 ## API Endpoints
 

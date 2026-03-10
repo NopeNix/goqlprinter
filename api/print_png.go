@@ -9,7 +9,6 @@ import (
 	"image/png"
 	"net/http"
 	"os"
-	"time"
 
 	"goqlprinter/brotherql"
 	"goqlprinter/internal/services"
@@ -26,6 +25,8 @@ type PrintPNGPayload struct {
 	LabelSize           string  `json:"label_size" binding:"required"`
 	PNGData             string  `json:"png_data" binding:"required"`
 	PNGScale            float64 `json:"png_scale"`
+	Orientation         string  `json:"orientation"`
+	ContentRotation     float64 `json:"content_rotation"`
 	HorizontalAlignment string  `json:"horizontal_alignment"`
 	VerticalAlignment   string  `json:"vertical_alignment"`
 	CustomHeightMM      float64 `json:"custom_height_mm"`
@@ -62,23 +63,14 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	}
 
 	if payload.Printer == "file" {
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, grayImg); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "PNG encode failed"})
-			return
-		}
-		filename := fmt.Sprintf("debug_output/labelpng_%d.png", time.Now().UnixNano())
-		if err := writeFile(filename, buf.Bytes()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save PNG: " + err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "Image saved to file successfully", "filename": filename})
+		saveDebugOutput(c, grayImg, "label_png", payload.Model, payload.Orientation)
 		return
 	}
 
+	printImg := rotateForPrinter(grayImg, payload.Orientation)
 	err = services.ConnectToPrinter(h.Printers, payload.Printer, payload.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
-		return printerDev.Print(grayImg, label)
+		return printerDev.Print(printImg, label)
 	})
 
 	if err != nil {
@@ -103,6 +95,8 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 		return nil, fmt.Errorf("invalid PNG file: %w", err)
 	}
 
+	isRotated := payload.Orientation == "rotated"
+
 	scale := payload.PNGScale
 	if scale <= 0 {
 		scale = 1.0
@@ -118,24 +112,38 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 		tapeLengthDots = label.DotsPrintableHeight // 0 for endless tape
 	}
 
-	// Base-fit: scale the image to fill the printable area, then apply user scale.
+	// When rotated, fit constraints are swapped.
 	srcBounds := img.Bounds()
 	srcW := srcBounds.Dx()
 	srcH := srcBounds.Dy()
 
 	var fitW, fitH int
-	if tapeLengthDots > 0 {
-		// Die-cut or custom height: fit within printable rectangle.
-		fitW = printHeadDots
-		fitH = tapeLengthDots
-	} else {
-		// Continuous tape: fit width, derive height proportionally.
-		fitW = printHeadDots
-		if srcW > 0 {
-			fitH = srcH * fitW / srcW
+	if isRotated {
+		if tapeLengthDots > 0 {
+			fitW = tapeLengthDots
+		} else if srcW > 0 {
+			fitW = printHeadDots // use printHead as base for proportional calc
 		}
-		if fitH == 0 {
-			fitH = 300 // ultimate fallback
+		fitH = printHeadDots
+		if fitW == 0 {
+			if srcW > 0 {
+				fitW = srcH * fitH / srcW // derive proportionally
+			}
+			if fitW == 0 {
+				fitW = 300
+			}
+		}
+	} else {
+		fitW = printHeadDots
+		if tapeLengthDots > 0 {
+			fitH = tapeLengthDots
+		} else {
+			if srcW > 0 {
+				fitH = srcH * fitW / srcW
+			}
+			if fitH == 0 {
+				fitH = 300
+			}
 		}
 	}
 
@@ -149,18 +157,36 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 		scaledH = 1
 	}
 
-	// Resize source image to (scaledW x scaledH) while preserving aspect ratio.
 	resized := imaging.Fit(img, scaledW, scaledH, imaging.Lanczos)
-	pngW := resized.Bounds().Dx()
-	pngH := resized.Bounds().Dy()
+	grayResized := convertToGrayscale(resized)
 
-	// Canvas height: fixed for die-cut/custom, dynamic for continuous tape.
-	imageHeight := tapeLengthDots
-	if imageHeight <= 0 {
-		imageHeight = pngH + 2*defaultPadding
+	// Apply content rotation if requested.
+	if payload.ContentRotation == 90 || payload.ContentRotation == 270 {
+		grayResized = brotherql.RotateImage(grayResized, payload.ContentRotation)
 	}
 
-	canvas := brotherql.CreateBlankImage(printHeadDots, imageHeight)
+	pngW := grayResized.Bounds().Dx()
+	pngH := grayResized.Bounds().Dy()
+
+	// Determine canvas dimensions based on orientation.
+	var canvasWidth, canvasHeight int
+	if isRotated {
+		canvasHeight = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasWidth = tapeLengthDots
+		} else {
+			canvasWidth = pngW + 2*defaultPadding
+		}
+	} else {
+		canvasWidth = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasHeight = tapeLengthDots
+		} else {
+			canvasHeight = pngH + 2*defaultPadding
+		}
+	}
+
+	canvas := brotherql.CreateBlankImage(canvasWidth, canvasHeight)
 
 	// Horizontal alignment.
 	var xPos int
@@ -168,14 +194,12 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 	case "start":
 		xPos = defaultPadding
 	case "end":
-		xPos = printHeadDots - pngW - defaultPadding
+		xPos = canvasWidth - pngW - defaultPadding
 	default: // "center" or unspecified
-		xPos = (printHeadDots - pngW) / 2
+		xPos = (canvasWidth - pngW) / 2
 	}
-
-	// Clamp to canvas bounds.
-	if xPos+pngW > printHeadDots {
-		xPos = printHeadDots - pngW
+	if xPos+pngW > canvasWidth {
+		xPos = canvasWidth - pngW
 	}
 	if xPos < 0 {
 		xPos = 0
@@ -185,23 +209,19 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 	var yPos int
 	switch payload.VerticalAlignment {
 	case "center":
-		yPos = (imageHeight - pngH) / 2
+		yPos = (canvasHeight - pngH) / 2
 	case "end":
-		yPos = imageHeight - pngH - defaultPadding
+		yPos = canvasHeight - pngH - defaultPadding
 	default: // "start" or unspecified
 		yPos = defaultPadding
 	}
-
-	// Clamp to canvas bounds.
-	if yPos+pngH > imageHeight {
-		yPos = imageHeight - pngH
+	if yPos+pngH > canvasHeight {
+		yPos = canvasHeight - pngH
 	}
 	if yPos < 0 {
 		yPos = 0
 	}
 
-	// Convert resized image to grayscale and draw onto canvas.
-	grayResized := convertToGrayscale(resized)
 	draw.Draw(canvas,
 		image.Rect(xPos, yPos, xPos+pngW, yPos+pngH),
 		grayResized,

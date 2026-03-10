@@ -23,7 +23,7 @@ serve:
 dev:
     #!/usr/bin/env bash
     trap 'kill 0' SIGINT
-    go run . serve 2>&1 | tee debug_log.log &
+    LOG_LEVEL=DEBUG go run . serve 2>&1 | tee debug_log.log &
     cd frontend && npm run dev &
     wait
 

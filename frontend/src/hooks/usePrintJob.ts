@@ -135,6 +135,8 @@ export function usePrintJob({
         ...payload,
         data: settings.qrData,
         qr_scale: settings.qrScale[0] / 100,
+        orientation: settings.selectedOrientation,
+        content_rotation: settings.textRotation,
         horizontal_alignment: settings.horizontalAlignment,
         vertical_alignment: settings.verticalAlignment,
       };
@@ -148,6 +150,7 @@ export function usePrintJob({
         ...payload,
         svg_data: svgData,
         orientation: settings.selectedOrientation,
+        content_rotation: settings.textRotation,
         svg_scale: settings.svgScale[0] / 100,
         horizontal_alignment: settings.horizontalAlignment,
         vertical_alignment: settings.verticalAlignment,
@@ -170,6 +173,8 @@ export function usePrintJob({
           ...payload,
           png_data: base64Data,
           png_scale: settings.pngScale[0] / 100,
+          orientation: settings.selectedOrientation,
+          content_rotation: settings.textRotation,
           horizontal_alignment: settings.horizontalAlignment,
           vertical_alignment: settings.verticalAlignment,
         };

@@ -81,6 +81,8 @@ type PrintSVGRequest struct {
 	Printer                string  `json:"printer"` // Optional
 	Model                  string  `json:"model"`   // Optional
 	SVGScale               float64 `json:"svg_scale"`
+	Orientation            string  `json:"orientation"`
+	ContentRotation        float64 `json:"content_rotation"`
 	HorizontalAlignment    string  `json:"horizontal_alignment"`
 	VerticalAlignment      string  `json:"vertical_alignment"`
 	CustomHeightMM         float64 `json:"custom_height_mm"`
@@ -117,13 +119,14 @@ func (h *Handlers) PrintSVG(c *gin.Context) {
 	}
 
 	if req.Printer == "file" {
-		saveDebugOutput(c, img, "label_svg", req.Model)
+		saveDebugOutput(c, img, "label_svg", req.Model, req.Orientation)
 		return
 	}
 
+	printImg := rotateForPrinter(img, req.Orientation)
 	err = services.ConnectToPrinter(h.Printers, req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
-		return printerDev.Print(img, label)
+		return printerDev.Print(printImg, label)
 	})
 
 	if err != nil {
@@ -139,14 +142,14 @@ func (h *Handlers) PrintSVG(c *gin.Context) {
 // fitted within the printable area, and positioned according to alignment
 // — matching the approach used for text labels.
 func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, error) {
+	isRotated := req.Orientation == "rotated"
+
 	scale := req.SVGScale
 	if scale <= 0 {
 		scale = 1.0
 	}
 
 	printHeadDots := label.DotsPrintableWidth
-
-	maxWidth := printHeadDots
 
 	// tapeLengthDots: custom > label-defined > 0 (dynamic).
 	var tapeLengthDots int
@@ -156,9 +159,18 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 		tapeLengthDots = label.DotsPrintableHeight // 0 for endless tape
 	}
 
-	var maxHeight int
-	if tapeLengthDots > 0 {
-		maxHeight = tapeLengthDots
+	// Determine rendering constraints — swapped when rotated.
+	var maxWidth, maxHeight int
+	if isRotated {
+		if tapeLengthDots > 0 {
+			maxWidth = tapeLengthDots
+		}
+		maxHeight = printHeadDots
+	} else {
+		maxWidth = printHeadDots
+		if tapeLengthDots > 0 {
+			maxHeight = tapeLengthDots
+		}
 	}
 
 	svgImg, err := rasterizeSVG(ctx, req.SVGData, maxWidth, maxHeight, scale)
@@ -167,31 +179,49 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 	}
 
 	grayImg := convertToGrayscale(svgImg)
+
+	// Apply content rotation if requested.
+	if req.ContentRotation == 90 || req.ContentRotation == 270 {
+		grayImg = brotherql.RotateImage(grayImg, req.ContentRotation)
+	}
+
 	svgW := grayImg.Bounds().Dx()
 	svgH := grayImg.Bounds().Dy()
 
-	// Canvas height: fixed for die-cut/custom, dynamic for continuous tape.
-	imageHeight := tapeLengthDots
-	if imageHeight <= 0 {
-		imageHeight = svgH + 2*defaultPadding
+	// Determine canvas dimensions based on orientation.
+	var canvasWidth, canvasHeight int
+	if isRotated {
+		canvasHeight = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasWidth = tapeLengthDots
+		} else {
+			canvasWidth = svgW + 2*defaultPadding
+		}
+	} else {
+		canvasWidth = printHeadDots
+		if tapeLengthDots > 0 {
+			canvasHeight = tapeLengthDots
+		} else {
+			canvasHeight = svgH + 2*defaultPadding
+		}
 	}
 
-	img := brotherql.CreateBlankImage(printHeadDots, imageHeight)
+	img := brotherql.CreateBlankImage(canvasWidth, canvasHeight)
 
-	// Horizontal alignment — same logic as text labels.
+	// Horizontal alignment.
 	var xPos int
 	switch req.HorizontalAlignment {
 	case "start":
 		xPos = defaultPadding
 	case "end":
-		xPos = printHeadDots - svgW - defaultPadding
+		xPos = canvasWidth - svgW - defaultPadding
 	default: // "center" or unspecified
-		xPos = (printHeadDots - svgW) / 2
+		xPos = (canvasWidth - svgW) / 2
 	}
 
 	// Clamp to canvas bounds.
-	if xPos+svgW > printHeadDots {
-		xPos = printHeadDots - svgW
+	if xPos+svgW > canvasWidth {
+		xPos = canvasWidth - svgW
 	}
 	if xPos < 0 {
 		xPos = 0
@@ -201,16 +231,16 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 	var yPos int
 	switch req.VerticalAlignment {
 	case "center":
-		yPos = (imageHeight - svgH) / 2
+		yPos = (canvasHeight - svgH) / 2
 	case "end":
-		yPos = imageHeight - svgH - defaultPadding
+		yPos = canvasHeight - svgH - defaultPadding
 	default: // "start" or unspecified
 		yPos = defaultPadding
 	}
 
 	// Clamp to canvas bounds.
-	if yPos+svgH > imageHeight {
-		yPos = imageHeight - svgH
+	if yPos+svgH > canvasHeight {
+		yPos = canvasHeight - svgH
 	}
 	if yPos < 0 {
 		yPos = 0

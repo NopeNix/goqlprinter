@@ -5,6 +5,7 @@
 | Package | Purpose |
 |---------|---------|
 | `gin-gonic/gin` | HTTP framework |
+| `spf13/cobra` | CLI framework |
 | `google/gousb` | USB communication (CGO) |
 | `disintegration/imaging` | Image scaling/fitting |
 | `golang/freetype` | TrueType text rendering |
@@ -12,6 +13,12 @@
 | `spf13/viper` | Config management |
 | `swaggo/gin-swagger` | Swagger API docs |
 | `alexbrainman/printer` | Windows native printing |
+
+## Frontend
+
+- React 18 + TypeScript + Tailwind CSS
+- Built with Vite into `frontend/dist/`
+- Embedded in binary via `//go:embed`
 
 ## Runtime Requirements
 

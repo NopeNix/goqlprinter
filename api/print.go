@@ -40,9 +40,19 @@ func mmToDots(mm float64) int {
 	return int(mm * 300.0 / 25.4)
 }
 
+// rotateForPrinter rotates a "rotated"-orientation image 90° so that its
+// width matches the print head. Standard-orientation images are returned as-is.
+func rotateForPrinter(img *image.Gray, orientation string) *image.Gray {
+	if orientation == "rotated" {
+		return brotherql.RotateImage(img, 90)
+	}
+	return img
+}
+
 // saveDebugOutput saves img to a debug PNG file (and its raster variant) and
 // writes a JSON response. It is used by all print handlers when printer == "file".
-func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model string) {
+// orientation controls whether the raster variant is rotated to match the print head.
+func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model string, orientation string) {
 	timestamp := time.Now().Format("20060102150405")
 	filename := fmt.Sprintf("debug_output/%s_%s.png", prefix, timestamp)
 	err := brotherql.SaveImageToFile(img, filename)
@@ -56,7 +66,8 @@ func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model strin
 	if modelName == "" {
 		modelName = defaultModel
 	}
-	if rasterImg, err := brotherql.PrepareForPrint(img, modelName); err == nil {
+	printImg := rotateForPrinter(img, orientation)
+	if rasterImg, err := brotherql.PrepareForPrint(printImg, modelName); err == nil {
 		_ = brotherql.SaveImageToFile(rasterImg, rasterFile)
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -152,12 +163,6 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 		return nil, fmt.Errorf("failed to draw text: %w", err)
 	}
 
-	// Rotate the entire image 90° for "rotated" orientation so it
-	// matches the print head width (DotsPrintableWidth).
-	if isRotated {
-		img = brotherql.RotateImage(img, 90)
-	}
-
 	return img, nil
 }
 
@@ -195,6 +200,7 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 			Printer:             req.Printer,
 			Model:               req.Model,
 			SVGScale:            req.SVGScale,
+			Orientation:         req.Orientation,
 			HorizontalAlignment: req.HorizontalAlignment,
 			VerticalAlignment:   req.VerticalAlignment,
 			CustomHeightMM:      req.CustomHeightMM,
@@ -214,13 +220,14 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 	}
 
 	if req.Printer == "file" {
-		saveDebugOutput(c, img, "label", req.Model)
+		saveDebugOutput(c, img, "label", req.Model, req.Orientation)
 		return
 	}
 
+	printImg := rotateForPrinter(img, req.Orientation)
 	err = services.ConnectToPrinter(h.Printers, req.Printer, req.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
-		return printerDev.Print(img, label)
+		return printerDev.Print(printImg, label)
 	})
 
 	if err != nil {
