@@ -12,7 +12,7 @@ import (
 // DarwinBackend provides macOS CUPS/IPP backend for Brother QL printers
 type DarwinBackend struct {
 	printerName string
-	client      *ipp.IPPClient
+	client      *ipp.CUPSClient
 }
 
 // DarwinProvider implements BackendProvider for macOS
@@ -23,40 +23,80 @@ func NewDarwinProvider() *DarwinProvider {
 	return &DarwinProvider{}
 }
 
-// FindPrinters discovers Brother QL printers via CUPS API
-func (p *DarwinProvider) FindPrinters() ([]PrinterInfo, error) {
-	// Connect to CUPS on localhost:631
-	client := ipp.NewIPPClient("localhost", 631, "", "", false)
-
-	// Test CUPS connection
-	if err := client.TestConnection(); err != nil {
-		return nil, fmt.Errorf("CUPS connection failed: %w", err)
+// newCUPSClient creates a CUPS client using unix socket (preferred) with HTTP fallback
+func newCUPSClient() (*ipp.CUPSClient, error) {
+	// Try unix socket first (modern macOS default)
+	socketAdapter := ipp.NewSocketAdapter("localhost", false)
+	// Skip cert reading — printer discovery and printing don't require CUPS auth,
+	// and the default cert paths (/etc/cups/certs/0) require root on macOS.
+	socketAdapter.CertSearchPaths = nil
+	if err := socketAdapter.TestConnection(); err == nil {
+		return ipp.NewCUPSClientWithAdapter("", socketAdapter), nil
 	}
 
-	// Get all printers via CUPS
-	// Note: go-ipp doesn't expose CUPS-Get-Printers directly
-	// We'll need to enumerate printers using GetPrinterAttributes with wildcard
-	// For now, return empty list and document that manual printer name is needed
-	// TODO: Implement printer discovery via lower-level IPP requests or exec lpstat
+	// Fall back to TCP (older macOS or custom CUPS config)
+	httpClient := ipp.NewCUPSClient("localhost", 631, "", "", false)
+	if err := httpClient.TestConnection(); err != nil {
+		return nil, fmt.Errorf("CUPS connection failed (tried unix socket and TCP:631): %w", err)
+	}
+	return httpClient, nil
+}
+
+// FindPrinters discovers Brother QL printers via CUPS API
+func (p *DarwinProvider) FindPrinters() ([]PrinterInfo, error) {
+	client, err := newCUPSClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use CUPS-Get-Printers to discover all printers
+	cupsResp, err := client.GetPrinters([]string{"printer-name", "device-uri", "printer-info"})
+	if err != nil {
+		return nil, fmt.Errorf("CUPS GetPrinters failed: %w", err)
+	}
 
 	var printers []PrinterInfo
+	for _, attrs := range cupsResp {
+		name := ""
+		if nameAttrs, ok := attrs["printer-name"]; ok && len(nameAttrs) > 0 {
+			if n, ok := nameAttrs[0].Value.(string); ok {
+				name = n
+			}
+		}
+		if name == "" {
+			continue
+		}
 
-	// Alternative: Use lpstat command to discover printers
-	// This would require exec.Command which we avoid for security
-	// Users need to know their printer name from System Preferences
+		if !isBrotherPrinter(name) {
+			// Also check device-uri for Brother vendor
+			if uriAttrs, ok := attrs["device-uri"]; ok && len(uriAttrs) > 0 {
+				if uri, ok := uriAttrs[0].Value.(string); ok {
+					if !isBrotherPrinter(uri) {
+						continue
+					}
+				}
+			} else {
+				continue
+			}
+		}
+
+		model := extractModel(name)
+		printers = append(printers, PrinterInfo{
+			Name:    name,
+			Model:   model,
+			URI:     "cups://" + name,
+			Backend: BackendNative,
+		})
+	}
 
 	return printers, nil
 }
 
 // Connect opens a connection to a printer via IPP
 func (p *DarwinProvider) Connect(printer PrinterInfo) (Backend, error) {
-	// Connect to CUPS on localhost:631
-	// Note: printer.Name should be the CUPS printer name from System Preferences
-	client := ipp.NewIPPClient("localhost", 631, "", "", false)
-
-	// Test connection
-	if err := client.TestConnection(); err != nil {
-		return nil, fmt.Errorf("CUPS connection failed: %w", err)
+	client, err := newCUPSClient()
+	if err != nil {
+		return nil, err
 	}
 
 	return &DarwinBackend{

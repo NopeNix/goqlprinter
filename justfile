@@ -104,7 +104,12 @@ build-darwin-native: build-frontend
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{ldflags}} -tags native -o {{out_dir}}/darwin-native-amd64/goqlprinter .
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build {{ldflags}} -tags native -o {{out_dir}}/darwin-native-arm64/goqlprinter .
 
+build-darwin-usb: build-frontend
+    mkdir -p {{out_dir}}/darwin-usb-arm64
+    CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build {{ldflags}} -tags usb -o {{out_dir}}/darwin-usb-arm64/goqlprinter .
+
 # Build all platform targets
+# Build all cross-compilable targets (darwin-usb requires building on macOS: just build-darwin-usb)
 build-all: build-linux-usb build-windows-usb build-linux-native build-linux-arm-native build-windows-native build-darwin-native
     @echo "All targets built successfully"
 
