@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { fontApi } from '../api/endpoints';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,10 @@ const FontSelector: React.FC<FontSelectorProps> = ({ onSelectFont }) => {
           onSelectFontRef.current(initialFont);
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.error('Failed to load fonts:', err);
+        toast.error('Failed to load fonts');
+      });
   }, []);
 
   useEffect(() => {

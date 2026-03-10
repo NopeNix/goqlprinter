@@ -1,3 +1,4 @@
+// Package brotherql implements the Brother QL label printer protocol and hardware communication.
 package brotherql
 
 // Backend abstracts printer communication

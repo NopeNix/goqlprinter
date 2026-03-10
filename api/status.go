@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -92,7 +94,7 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 				allData = append(allData, tmpBuf[:n]...)
 				break
 			}
-			if err != nil && err.Error() != "EOF" {
+			if err != nil && !errors.Is(err, io.EOF) {
 				return fmt.Errorf("failed to read status: %w", err)
 			}
 			// EOF = no data yet, retry

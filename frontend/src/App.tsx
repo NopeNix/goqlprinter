@@ -6,7 +6,6 @@ import {
 } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
-import { Label } from "./components/ui/label";
 import { Slider } from "./components/ui/slider";
 import PrinterDisconnectedNotification from "./components/PrinterDisconnectedNotification";
 import PrinterStatusBar from "./components/PrinterStatusBar";

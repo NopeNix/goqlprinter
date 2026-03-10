@@ -1,4 +1,5 @@
 import { Printer, Wifi, WifiOff, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
+import { DarkModeToggle } from "./DarkModeToggle";
 
 export type PrinterStatusKind = "ready" | "busy" | "error" | "offline" | "file";
 
@@ -118,6 +119,9 @@ export default function PrinterStatusBar({
               <RefreshCw className={`h-3 w-3 text-muted-foreground ${refreshLoading ? "animate-spin" : ""}`} />
             </button>
           )}
+          <div onClick={(e) => e.stopPropagation()}>
+            <DarkModeToggle />
+          </div>
           <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${cfg.className}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotClassName}`} />
             {pillLabel}

@@ -179,7 +179,7 @@ export function usePrintJob({
           horizontal_alignment: settings.horizontalAlignment,
           vertical_alignment: settings.verticalAlignment,
         };
-      } catch (error) {
+      } catch {
         toast.error("Could not process PNG file.");
         return;
       }

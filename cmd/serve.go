@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	iofs "io/fs"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -100,6 +99,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		cfg.Server.Host, cfg.Server.Port)
 
 	r := gin.New()
+	r.MaxMultipartMemory = 10 << 20 // 10 MB
 	if logLevel != "ERROR" {
 		r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 			return fmt.Sprintf("[%s] %s %s %d %s %q\n",
@@ -147,12 +147,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	distFS, err := iofs.Sub(EmbeddedFiles, "frontend/dist")
 	if err != nil {
-		log.Fatalf("Fatal error: failed to create sub filesystem for dist: %v", err)
+		return fmt.Errorf("failed to create sub filesystem for dist: %w", err)
 	}
 
 	assetsFS, err := iofs.Sub(distFS, "assets")
 	if err != nil {
-		log.Fatalf("Fatal error: failed to create sub filesystem for assets: %v", err)
+		return fmt.Errorf("failed to create sub filesystem for assets: %w", err)
 	}
 
 	r.StaticFS("/assets", http.FS(assetsFS))

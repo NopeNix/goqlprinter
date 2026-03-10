@@ -1,4 +1,4 @@
-export const saveSettings = (settings: Record<string, any>) => {
+export const saveSettings = <T>(settings: T) => {
   try {
     localStorage.setItem('labelSettings', JSON.stringify(settings));
   } catch {

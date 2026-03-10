@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { labelApi } from '../api/endpoints';
 import {
   Select,
@@ -31,7 +32,10 @@ const LabelSizeSelector: React.FC<LabelSizeSelectorProps> = ({ value, onLabelSiz
           onLabelSizeChange(sizes[0]);
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.error('Failed to load label sizes:', err);
+        toast.error('Failed to load label sizes');
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
 

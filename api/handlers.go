@@ -1,3 +1,4 @@
+// Package api provides the HTTP handler layer for the Brother QL label printer web service.
 package api
 
 import (

@@ -17,6 +17,8 @@ Web-based label printing interface for Brother QL thermal printers. Provides a R
 - 20+ label sizes (endless tape, die-cut, round)
 - CLI interface alongside the web UI
 
+![goqlprinter screenshot](docs/screenshot.png)
+
 ## Supported Printers
 
 Brother QL-500, 550, 560, 570, 580N, 650TD, 700, 710W, 720NW, 800, 810W, 820NWB, 1050, 1060N, 1100, 1110NWB
@@ -56,14 +58,33 @@ just build-all
 
 | Target | Command |
 |--------|---------|
-| Linux native (pure Go) | `just build-linux-native` |
-| Linux native (ARM64) | `just build-linux-arm-native` |
-| Linux USB (libusb) | `just build-linux-usb` |
-| Windows native | `just build-windows-native` |
-| Windows USB | `just build-windows-usb` |
+| Linux | `just build-linux-native` |
+| Linux (ARM64) | `just build-linux-arm-native` |
+| Windows | `just build-windows-native` |
 | macOS (amd64 + arm64) | `just build-darwin-native` |
 
 The binary embeds the frontend — no separate web server needed.
+
+The native builds use OS printer interfaces and work with standard printer drivers. Printer status reporting varies by platform:
+
+| Platform | Printing | Status reporting |
+|----------|----------|------------------|
+| Linux | Full | Full (bidirectional `/dev/usb/lp*`) |
+| macOS | Full | Basic (printer state via CUPS/IPP, no media info) |
+| Windows | Full | Minimal (connection status only, no detailed errors) |
+
+<details>
+<summary>Advanced: USB (libusb) builds</summary>
+
+USB builds communicate directly with the printer over USB, bypassing OS drivers. This gives full bidirectional status reporting on all platforms, but requires CGO, libusb-dev, and that no OS driver claims the device.
+
+| Target | Command |
+|--------|---------|
+| Linux USB | `just build-linux-usb` |
+| Windows USB | `just build-windows-usb` |
+
+Windows USB builds require replacing the Brother driver with WinUSB using [Zadig](https://zadig.akeo.ie/).
+</details>
 
 ## Configuration
 
@@ -115,7 +136,7 @@ Save to `/etc/udev/rules.d/50-brother-ql.rules` and reload: `sudo udevadm contro
 
 ## Windows
 
-Windows users need to replace the Brother driver with WinUSB using [Zadig](https://zadig.akeo.ie/) before the USB backend can communicate with the printer.
+Works with the standard Brother printer driver — no extra setup needed.
 
 ## API
 
