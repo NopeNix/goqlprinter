@@ -365,8 +365,8 @@ func TestPrintPNGLabel_InvalidBase64(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Invalid base64") {
-		t.Errorf("expected 'Invalid base64' in response, got: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "invalid base64") {
+		t.Errorf("expected 'invalid base64' in response, got: %s", w.Body.String())
 	}
 }
 
@@ -387,8 +387,8 @@ func TestPrintPNGLabel_ValidBase64ButNotPNG(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Invalid PNG") {
-		t.Errorf("expected 'Invalid PNG' in response, got: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "invalid PNG") {
+		t.Errorf("expected 'invalid PNG' in response, got: %s", w.Body.String())
 	}
 }
 

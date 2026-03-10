@@ -16,6 +16,9 @@ interface UsePreviewParams {
   // QR optional
   qrData?: string;
   qrScale?: number;
+  // PNG optional
+  pngData?: File | null;
+  pngScale?: number;
   // Endless tape custom height
   customHeightMM?: number;
   // Control
@@ -41,6 +44,8 @@ interface PreviewRequest {
   svg_scale?: number;
   qr_data?: string;
   qr_scale?: number;
+  png_data?: string;
+  png_scale?: number;
   custom_height_mm?: number;
   [key: string]: unknown;
 }
@@ -70,6 +75,8 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     svgScale,
     qrData,
     qrScale,
+    pngData,
+    pngScale,
     customHeightMM,
     enabled = true,
   } = params;
@@ -122,6 +129,20 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         requestBody.qr_scale = qrScale;
       }
 
+      // Add PNG fields if present
+      if (pngData) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(pngData);
+          reader.onload = () => resolve((reader.result as string).split(",")[1]);
+          reader.onerror = reject;
+        });
+        requestBody.png_data = base64;
+      }
+      if (pngScale !== undefined) {
+        requestBody.png_scale = pngScale;
+      }
+
       const data = await printApi.preview(requestBody, signal);
 
       // Only update state if request wasn't aborted
@@ -155,6 +176,8 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     svgScale,
     qrData,
     qrScale,
+    pngData,
+    pngScale,
     customHeightMM,
   ]);
 

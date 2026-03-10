@@ -169,6 +169,9 @@ export function usePrintJob({
         payload = {
           ...payload,
           png_data: base64Data,
+          png_scale: settings.pngScale[0] / 100,
+          horizontal_alignment: settings.horizontalAlignment,
+          vertical_alignment: settings.verticalAlignment,
         };
       } catch (error) {
         toast.error("Could not process PNG file.");

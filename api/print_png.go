@@ -21,11 +21,14 @@ import (
 // PrintPNGPayload defines the structure for the JSON request
 // @description Request body for printing PNG images
 type PrintPNGPayload struct {
-	Printer        string  `json:"printer"` // Optional
-	Model          string  `json:"model"`   // Optional
-	LabelSize      string  `json:"label_size" binding:"required"`
-	PNGData        string  `json:"png_data" binding:"required"`
-	CustomHeightMM float64 `json:"custom_height_mm"`
+	Printer             string  `json:"printer"` // Optional
+	Model               string  `json:"model"`   // Optional
+	LabelSize           string  `json:"label_size" binding:"required"`
+	PNGData             string  `json:"png_data" binding:"required"`
+	PNGScale            float64 `json:"png_scale"`
+	HorizontalAlignment string  `json:"horizontal_alignment"`
+	VerticalAlignment   string  `json:"vertical_alignment"`
+	CustomHeightMM      float64 `json:"custom_height_mm"`
 }
 
 // PrintPNGLabel godoc
@@ -46,54 +49,19 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	pngBytes, err := base64.StdEncoding.DecodeString(payload.PNGData)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid base64 PNG data: " + err.Error()})
-		return
-	}
-
-	img, err := png.Decode(bytes.NewReader(pngBytes))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PNG file: " + err.Error()})
-		return
-	}
-
-	printer := payload.Printer
-	model := payload.Model
-	labelSize := payload.LabelSize
-
-	label, err := brotherql.GetLabel(labelSize)
+	label, err := brotherql.GetLabel(payload.LabelSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid label_size"})
 		return
 	}
 
-	// Scale and center the PNG image within the printable area.
-	wantW := label.DotsPrintableWidth
-	wantH := label.DotsPrintableHeight
-	if wantH == 0 {
-		if payload.CustomHeightMM > 0 {
-			wantH = mmToDots(payload.CustomHeightMM)
-		} else {
-			// Proportional scaling from source image aspect ratio.
-			srcBounds := img.Bounds()
-			if srcBounds.Dx() > 0 {
-				wantH = srcBounds.Dy() * wantW / srcBounds.Dx()
-			}
-			if wantH == 0 {
-				wantH = 300 // ultimate fallback
-			}
-		}
+	grayImg, err := processPNG(payload, label)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	resized := imaging.Fit(img, wantW, wantH, imaging.Lanczos)
-	grayImg := image.NewGray(image.Rect(0, 0, wantW, wantH))
-	draw.Draw(grayImg, grayImg.Bounds(), image.White, image.Point{}, draw.Src)
-	offsetX := (wantW - resized.Bounds().Dx()) / 2
-	offsetY := (wantH - resized.Bounds().Dy()) / 2
-	draw.Draw(grayImg, image.Rect(offsetX, offsetY, offsetX+resized.Bounds().Dx(), offsetY+resized.Bounds().Dy()), resized, image.Point{0, 0}, draw.Over)
-
-	if printer == "file" {
+	if payload.Printer == "file" {
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, grayImg); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "PNG encode failed"})
@@ -108,7 +76,7 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	err = services.ConnectToPrinter(h.Printers, printer, model, func(backend brotherql.Backend, model string) error {
+	err = services.ConnectToPrinter(h.Printers, payload.Printer, payload.Model, func(backend brotherql.Backend, model string) error {
 		printerDev := brotherql.NewBrotherQL(model, backend)
 		return printerDev.Print(grayImg, label)
 	})
@@ -119,6 +87,128 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "Print job sent successfully"})
+}
+
+// processPNG decodes base64 PNG data, scales it to fit the printable area
+// (multiplied by the user scale factor), and positions it on the canvas
+// using the requested alignment — matching the approach used for SVG/QR.
+func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray, error) {
+	pngBytes, err := base64.StdEncoding.DecodeString(payload.PNGData)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base64 PNG data: %w", err)
+	}
+
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		return nil, fmt.Errorf("invalid PNG file: %w", err)
+	}
+
+	scale := payload.PNGScale
+	if scale <= 0 {
+		scale = 1.0
+	}
+
+	printHeadDots := label.DotsPrintableWidth
+
+	// tapeLengthDots: custom > label-defined > 0 (dynamic).
+	var tapeLengthDots int
+	if payload.CustomHeightMM > 0 && !label.IsDieCut {
+		tapeLengthDots = mmToDots(payload.CustomHeightMM)
+	} else {
+		tapeLengthDots = label.DotsPrintableHeight // 0 for endless tape
+	}
+
+	// Base-fit: scale the image to fill the printable area, then apply user scale.
+	srcBounds := img.Bounds()
+	srcW := srcBounds.Dx()
+	srcH := srcBounds.Dy()
+
+	var fitW, fitH int
+	if tapeLengthDots > 0 {
+		// Die-cut or custom height: fit within printable rectangle.
+		fitW = printHeadDots
+		fitH = tapeLengthDots
+	} else {
+		// Continuous tape: fit width, derive height proportionally.
+		fitW = printHeadDots
+		if srcW > 0 {
+			fitH = srcH * fitW / srcW
+		}
+		if fitH == 0 {
+			fitH = 300 // ultimate fallback
+		}
+	}
+
+	// Apply user scale to the base-fit dimensions.
+	scaledW := int(float64(fitW) * scale)
+	scaledH := int(float64(fitH) * scale)
+	if scaledW < 1 {
+		scaledW = 1
+	}
+	if scaledH < 1 {
+		scaledH = 1
+	}
+
+	// Resize source image to (scaledW x scaledH) while preserving aspect ratio.
+	resized := imaging.Fit(img, scaledW, scaledH, imaging.Lanczos)
+	pngW := resized.Bounds().Dx()
+	pngH := resized.Bounds().Dy()
+
+	// Canvas height: fixed for die-cut/custom, dynamic for continuous tape.
+	imageHeight := tapeLengthDots
+	if imageHeight <= 0 {
+		imageHeight = pngH + 2*defaultPadding
+	}
+
+	canvas := brotherql.CreateBlankImage(printHeadDots, imageHeight)
+
+	// Horizontal alignment.
+	var xPos int
+	switch payload.HorizontalAlignment {
+	case "start":
+		xPos = defaultPadding
+	case "end":
+		xPos = printHeadDots - pngW - defaultPadding
+	default: // "center" or unspecified
+		xPos = (printHeadDots - pngW) / 2
+	}
+
+	// Clamp to canvas bounds.
+	if xPos+pngW > printHeadDots {
+		xPos = printHeadDots - pngW
+	}
+	if xPos < 0 {
+		xPos = 0
+	}
+
+	// Vertical alignment.
+	var yPos int
+	switch payload.VerticalAlignment {
+	case "center":
+		yPos = (imageHeight - pngH) / 2
+	case "end":
+		yPos = imageHeight - pngH - defaultPadding
+	default: // "start" or unspecified
+		yPos = defaultPadding
+	}
+
+	// Clamp to canvas bounds.
+	if yPos+pngH > imageHeight {
+		yPos = imageHeight - pngH
+	}
+	if yPos < 0 {
+		yPos = 0
+	}
+
+	// Convert resized image to grayscale and draw onto canvas.
+	grayResized := convertToGrayscale(resized)
+	draw.Draw(canvas,
+		image.Rect(xPos, yPos, xPos+pngW, yPos+pngH),
+		grayResized,
+		image.Point{0, 0},
+		draw.Over)
+
+	return canvas, nil
 }
 
 func writeFile(filename string, data []byte) error {

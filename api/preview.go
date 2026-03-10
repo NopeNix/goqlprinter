@@ -26,6 +26,8 @@ type PreviewRequest struct {
 	SVGScale               float64 `json:"svg_scale"`
 	QRData                 string  `json:"qr_data"`
 	QRScale                float64 `json:"qr_scale"`
+	PNGData                string  `json:"png_data"`
+	PNGScale               float64 `json:"png_scale"`
 	CustomHeightMM         float64 `json:"custom_height_mm"`
 }
 
@@ -88,6 +90,20 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			CustomHeightMM:      req.CustomHeightMM,
 		}
 		img, err = processQR(qrReq, label)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else if req.PNGData != "" {
+		pngReq := PrintPNGPayload{
+			LabelSize:           req.LabelSize,
+			PNGData:             req.PNGData,
+			PNGScale:            req.PNGScale,
+			HorizontalAlignment: req.HorizontalAlignment,
+			VerticalAlignment:   req.VerticalAlignment,
+			CustomHeightMM:      req.CustomHeightMM,
+		}
+		img, err = processPNG(pngReq, label)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

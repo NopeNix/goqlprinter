@@ -37,6 +37,7 @@ export interface LabelSettings {
   qrData: string;
   qrScale: number[];
   svgScale: number[];
+  pngScale: number[];
 
   // Alignment
   horizontalAlignment: "start" | "center" | "end";
@@ -62,6 +63,7 @@ export type LabelSettingsAction =
   | { type: "SET_QR_DATA"; payload: string }
   | { type: "SET_QR_SCALE"; payload: number[] }
   | { type: "SET_SVG_SCALE"; payload: number[] }
+  | { type: "SET_PNG_SCALE"; payload: number[] }
   | { type: "SET_HORIZONTAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_VERTICAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_TEXT_ROTATION"; payload: number }
@@ -84,6 +86,7 @@ export const DEFAULT_SETTINGS: LabelSettings = {
   qrData: "",
   qrScale: [100],
   svgScale: [100],
+  pngScale: [100],
   horizontalAlignment: "center",
   verticalAlignment: "center",
   textRotation: 0,
@@ -127,6 +130,7 @@ function migrateFromOldFormat(saved: Record<string, unknown>): LabelSettings {
       qrData: (saved.qrData as string) ?? DEFAULT_SETTINGS.qrData,
       qrScale: (saved.qrScale as number[]) || DEFAULT_SETTINGS.qrScale,
       svgScale: (saved.svgScale as number[]) || DEFAULT_SETTINGS.svgScale,
+      pngScale: (saved.pngScale as number[]) || DEFAULT_SETTINGS.pngScale,
       horizontalAlignment:
         (saved.horizontalAlignment as "start" | "center" | "end") ||
         DEFAULT_SETTINGS.horizontalAlignment,
@@ -185,6 +189,8 @@ function labelSettingsReducer(
       return { ...state, qrScale: action.payload };
     case "SET_SVG_SCALE":
       return { ...state, svgScale: action.payload };
+    case "SET_PNG_SCALE":
+      return { ...state, pngScale: action.payload };
     case "SET_HORIZONTAL_ALIGNMENT":
       return { ...state, horizontalAlignment: action.payload };
     case "SET_VERTICAL_ALIGNMENT":

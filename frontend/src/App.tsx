@@ -88,7 +88,7 @@ function MainApp() {
 
   // Backend preview integration
   const { previewUrl, isLoading: previewLoading, error: previewError } = usePreview({
-    text: settings.labelText,
+    text: settings.printMode === 'text' ? settings.labelText : '',
     labelSize: settings.selectedLabelSize,
     fontFamily: settings.selectedFont,
     fontSize: settings.fontSize[0],
@@ -100,8 +100,10 @@ function MainApp() {
     svgScale: settings.svgScale[0] / 100,
     qrData: settings.printMode === 'qr' ? settings.qrData : undefined,
     qrScale: settings.qrScale[0] / 100,
+    pngData: settings.printMode === 'png' ? pngFile : undefined,
+    pngScale: settings.pngScale[0] / 100,
     customHeightMM: settings.heightMode === "manual" ? settings.customHeightMM : 0,
-    enabled: settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr',
+    enabled: settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr' || settings.printMode === 'png',
   });
 
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -207,7 +209,7 @@ function MainApp() {
           </>
         );
       case "qr":
-        return <QRCodeGenerator qrData={settings.qrData} onQrDataChange={(v: string) => dispatch({ type: "SET_QR_DATA", payload: v })} qrScale={settings.qrScale} onQrScaleChange={(v) => dispatch({ type: "SET_QR_SCALE", payload: v })} />;
+        return <QRCodeGenerator qrData={settings.qrData} onQrDataChange={(v: string) => dispatch({ type: "SET_QR_DATA", payload: v })} />;
       case "svg":
         return (
           <div className="space-y-4">
@@ -226,26 +228,13 @@ function MainApp() {
               Load SVG
             </Button>
             {svgData && (
-              <>
-                <Button
-                  variant="destructive"
-                  onClick={handleClearSvg}
-                  className="w-full"
-                >
-                  Clear SVG
-                </Button>
-                <div>
-                  <Label htmlFor="svg-scale">SVG Scale: {settings.svgScale[0]}%</Label>
-                  <Slider
-                    id="svg-scale"
-                    min={10}
-                    max={200}
-                    step={1}
-                    value={settings.svgScale}
-                    onValueChange={(v) => dispatch({ type: "SET_SVG_SCALE", payload: v })}
-                  />
-                </div>
-              </>
+              <Button
+                variant="destructive"
+                onClick={handleClearSvg}
+                className="w-full"
+              >
+                Clear SVG
+              </Button>
             )}
           </div>
         );
@@ -267,22 +256,13 @@ function MainApp() {
               Load PNG
             </Button>
             {pngFile && (
-              <>
-                <Button
-                  variant="destructive"
-                  onClick={handleClearPng}
-                  className="w-full"
-                >
-                  Clear PNG
-                </Button>
-                <div className="flex justify-center">
-                  <img
-                    src={URL.createObjectURL(pngFile)}
-                    alt="Preview"
-                    className="max-h-40"
-                  />
-                </div>
-              </>
+              <Button
+                variant="destructive"
+                onClick={handleClearPng}
+                className="w-full"
+              >
+                Clear PNG
+              </Button>
             )}
           </div>
         );
@@ -372,7 +352,46 @@ function MainApp() {
         />
       );
     }
+    if (settings.printMode === "png" && pngFile) {
+      return (
+        <TextAlignmentSelector
+          onHorizontalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_HORIZONTAL_ALIGNMENT", payload: v })}
+          onVerticalChange={(v: "start" | "center" | "end") => dispatch({ type: "SET_VERTICAL_ALIGNMENT", payload: v })}
+          horizontalValue={settings.horizontalAlignment}
+          verticalValue={settings.verticalAlignment}
+          onTextRotationChange={() => {}}
+          textRotationValue={0}
+          onOrientationChange={() => {}}
+          orientationValue={"standard"}
+        />
+      );
+    }
     return null;
+  };
+
+  const scaleControl = () => {
+    let value: number[] | null = null;
+    let onChange: ((v: number[]) => void) | null = null;
+
+    if (settings.printMode === "svg" && svgData) {
+      value = settings.svgScale;
+      onChange = (v) => dispatch({ type: "SET_SVG_SCALE", payload: v });
+    } else if (settings.printMode === "qr" && settings.qrData) {
+      value = settings.qrScale;
+      onChange = (v) => dispatch({ type: "SET_QR_SCALE", payload: v });
+    } else if (settings.printMode === "png" && pngFile) {
+      value = settings.pngScale;
+      onChange = (v) => dispatch({ type: "SET_PNG_SCALE", payload: v });
+    }
+
+    if (!value || !onChange) return null;
+
+    return (
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Slider min={10} max={200} step={1} value={value} onValueChange={onChange} className="flex-1" />
+        <span className="text-xs text-muted-foreground tabular-nums w-8 text-right flex-shrink-0">{value[0]}%</span>
+      </div>
+    );
   };
 
   const previewColumn = (
@@ -441,9 +460,10 @@ function MainApp() {
           </span>
         )}
       </div>
-      {alignmentControls() && (
-        <div className="flex justify-center px-4 pt-2">
+      {(alignmentControls() || scaleControl()) && (
+        <div className="flex items-center gap-2 px-4 pt-2">
           {alignmentControls()}
+          {scaleControl()}
         </div>
       )}
       <CardContent className="flex flex-1 items-center justify-center overflow-auto max-w-full pt-2 pb-4">
@@ -465,7 +485,7 @@ function MainApp() {
           verticalAlignment={settings.verticalAlignment}
           textRotation={settings.textRotation}
           svgScale={settings.svgScale[0] / 100}
-          previewUrl={(settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr') ? previewUrl : null}
+          previewUrl={(settings.printMode === 'text' || settings.printMode === 'svg' || settings.printMode === 'qr' || settings.printMode === 'png') ? previewUrl : null}
           customHeightMM={settings.customHeightMM}
           heightMode={settings.heightMode}
         />
