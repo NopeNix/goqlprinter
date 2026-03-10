@@ -4,8 +4,7 @@ package services
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
+	"log/slog"
 
 	"github.com/google/gousb"
 
@@ -23,44 +22,46 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 		return err
 	}
 
-	if !strings.HasPrefix(resolvedPrinter.UID, "usb:") {
-		return fmt.Errorf("unsupported printer format: %s", resolvedPrinter.UID)
+	if modelToUse == "" {
+		return fmt.Errorf("printer model not specified")
 	}
 
-	parts := strings.Split(resolvedPrinter.UID, ":")
-	if len(parts) != 3 {
-		return fmt.Errorf("invalid printer UID format: %s", resolvedPrinter.UID)
-	}
-
-	bus, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return fmt.Errorf("invalid bus number: %s", parts[1])
-	}
-
-	address, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return fmt.Errorf("invalid address number: %s", parts[2])
+	// Look up the USB product ID from the model name.
+	// This is more reliable than bus/address which can change on macOS
+	// when kernel drivers are detached/reattached.
+	productID, ok := brotherql.PrinterProductIDs[resolvedPrinter.Model]
+	if !ok {
+		return fmt.Errorf("unknown printer model: %s", resolvedPrinter.Model)
 	}
 
 	ctx := gousb.NewContext()
-	defer ctx.Close()
+	defer func() {
+		if cerr := ctx.Close(); cerr != nil {
+			slog.Warn("failed to close USB context", "error", cerr)
+		}
+	}()
 
 	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
-		return desc.Bus == bus && desc.Address == address
+		return desc.Vendor == brotherql.BrotherVendorID &&
+			desc.Product == gousb.ID(productID)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to open USB device: %w", err)
 	}
 	if len(devices) == 0 {
-		return fmt.Errorf("USB device not found: bus %d, address %d", bus, address)
+		return fmt.Errorf("USB device %s not found", resolvedPrinter.Model)
 	}
 
 	dev := devices[0]
-	defer dev.Close()
+	defer func() {
+		if cerr := dev.Close(); cerr != nil {
+			slog.Warn("failed to close USB device", "error", cerr)
+		}
+	}()
 
-	for i, d := range devices {
-		if i > 0 {
-			d.Close()
+	for _, d := range devices[1:] {
+		if cerr := d.Close(); cerr != nil {
+			slog.Warn("failed to close extra USB device", "error", cerr)
 		}
 	}
 
@@ -72,11 +73,11 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 	if err != nil {
 		return fmt.Errorf("failed to create USB backend: %w", err)
 	}
-	defer backend.Close()
-
-	if modelToUse == "" {
-		return fmt.Errorf("printer model not specified")
-	}
+	defer func() {
+		if cerr := backend.Close(); cerr != nil {
+			slog.Warn("failed to close USB backend", "error", cerr)
+		}
+	}()
 
 	return handler(backend, modelToUse)
 }

@@ -99,11 +99,11 @@ func NewUSBProvider() *USBProvider {
 	return &USBProvider{}
 }
 
-// brotherVendorID is the USB vendor ID for Brother Industries.
-const brotherVendorID = 0x04f9
+// BrotherVendorID is the USB vendor ID for Brother Industries.
+const BrotherVendorID = 0x04f9
 
-// printerModels maps known Brother QL model names to their USB product IDs.
-var printerModels = map[string]int{
+// PrinterProductIDs maps known Brother QL model names to their USB product IDs.
+var PrinterProductIDs = map[string]int{
 	"QL-500":     0x2015,
 	"QL-550":     0x2016,
 	"QL-560":     0x2027,
@@ -123,6 +123,8 @@ var printerModels = map[string]int{
 }
 
 // FindPrinters discovers all connected Brother USB printers.
+// Uses the OpenDevices callback to inspect descriptors without actually opening
+// devices, which avoids kernel driver detach/reattach cycles on macOS.
 func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 	ctx := gousb.NewContext()
 	defer func() {
@@ -131,44 +133,34 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 		}
 	}()
 
-	log.Printf("USB: Scanning for Brother printers (VendorID: 0x%04x)...", brotherVendorID)
-
-	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
-		return desc.Vendor == brotherVendorID
-	})
-	if err != nil {
-		log.Printf("USB: Failed to open devices: %v", err)
-		return nil, fmt.Errorf("failed to enumerate USB devices: %w", err)
-	}
-
-	log.Printf("USB: Found %d Brother USB device(s)", len(devices))
+	log.Printf("USB: Scanning for Brother printers (VendorID: 0x%04x)...", BrotherVendorID)
 
 	var printers []PrinterInfo
 
-	for _, dev := range devices {
-		productID := int(dev.Desc.Product)
+	// Return false from callback to avoid opening (and resetting) devices.
+	// The DeviceDesc contains all info we need for discovery.
+	_, _ = ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
+		if desc.Vendor != BrotherVendorID {
+			return false
+		}
 
-		for modelName, modelProductID := range printerModels {
+		productID := int(desc.Product)
+		for modelName, modelProductID := range PrinterProductIDs {
 			if productID == modelProductID {
-				uri := fmt.Sprintf("usb:%03d:%03d", dev.Desc.Bus, dev.Desc.Address)
-
 				printer := PrinterInfo{
 					Name:    fmt.Sprintf("%s (USB)", modelName),
 					Model:   modelName,
-					URI:     uri,
+					URI:     fmt.Sprintf("usb:0x%04x:0x%04x", BrotherVendorID, productID),
 					Backend: BackendUSB,
 				}
-
 				printers = append(printers, printer)
-				log.Printf("USB: Found %s at %s", modelName, uri)
+				log.Printf("USB: Found %s (pid=0x%04x)", modelName, productID)
 				break
 			}
 		}
 
-		if err := dev.Close(); err != nil {
-			slog.Warn("failed to close USB device", "error", err)
-		}
-	}
+		return false // don't open the device
+	})
 
 	if len(printers) == 0 {
 		log.Printf("USB: No Brother QL printers found. If your printer is connected but not detected (especially on Windows), you may need to install a generic USB driver like WinUSB using Zadig.")
@@ -179,20 +171,21 @@ func (p *USBProvider) FindPrinters() ([]PrinterInfo, error) {
 
 // Connect opens a USB connection to the specified printer.
 func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
-	var bus, address int
-	_, err := fmt.Sscanf(printer.URI, "usb:%d:%d", &bus, &address)
-	if err != nil {
-		return nil, fmt.Errorf("invalid USB URI format '%s': %w", printer.URI, err)
+	// Resolve product ID from model name for reliable matching.
+	// Bus/address can change between discovery and connect (especially on macOS
+	// where kernel driver detach/reattach may cause a device reset).
+	productID, ok := PrinterProductIDs[printer.Model]
+	if !ok {
+		return nil, fmt.Errorf("unknown printer model: %s", printer.Model)
 	}
 
-	log.Printf("USB: Connecting to %s at bus=%d address=%d", printer.Model, bus, address)
+	log.Printf("USB: Connecting to %s (vid=0x%04x, pid=0x%04x)", printer.Model, BrotherVendorID, productID)
 
 	ctx := gousb.NewContext()
 
 	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
-		return desc.Vendor == brotherVendorID &&
-			desc.Bus == bus &&
-			desc.Address == address
+		return desc.Vendor == BrotherVendorID &&
+			desc.Product == gousb.ID(productID)
 	})
 	if err != nil {
 		if cerr := ctx.Close(); cerr != nil {
@@ -205,19 +198,14 @@ func (p *USBProvider) Connect(printer PrinterInfo) (Backend, error) {
 		if cerr := ctx.Close(); cerr != nil {
 			slog.Warn("failed to close USB context", "error", cerr)
 		}
-		return nil, fmt.Errorf("USB device not found at bus=%d address=%d", bus, address)
+		return nil, fmt.Errorf("USB device %s not found (vid=0x%04x, pid=0x%04x)", printer.Model, BrotherVendorID, productID)
 	}
 
-	if len(devices) > 1 {
-		for _, dev := range devices {
-			if cerr := dev.Close(); cerr != nil {
-				slog.Warn("failed to close USB device", "error", cerr)
-			}
+	// If multiple devices of the same model, close extras and use the first one
+	for _, dev := range devices[1:] {
+		if cerr := dev.Close(); cerr != nil {
+			slog.Warn("failed to close extra USB device", "error", cerr)
 		}
-		if cerr := ctx.Close(); cerr != nil {
-			slog.Warn("failed to close USB context", "error", cerr)
-		}
-		return nil, fmt.Errorf("multiple devices found at bus=%d address=%d (unexpected)", bus, address)
 	}
 
 	dev := devices[0]
