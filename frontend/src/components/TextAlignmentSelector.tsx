@@ -49,7 +49,7 @@ const TextAlignmentSelector: React.FC<TextAlignmentSelectorProps> = ({
   };
 
   return (
-    <div className="flex gap-1 items-center">
+    <div className="flex flex-wrap gap-1 items-center">
       {onTextAlignChange && (
         <ToggleGroup type="single" onValueChange={handleTextAlignChange} value={textAlignValue ?? 'left'} variant="outline" size="sm">
           <ToggleGroupItem value="left" aria-label="Text align left" title="Text align left">

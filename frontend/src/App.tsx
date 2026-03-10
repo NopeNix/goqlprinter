@@ -33,12 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "./components/ui/tabs";
 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import QRLabelPage from "./pages/QRLabelPage";
@@ -161,13 +155,11 @@ function MainApp() {
   const handleClearPng = () => {
     setPngFile(null);
     if (pngInputRef.current) pngInputRef.current.value = "";
-    dispatch({ type: "SET_PRINT_MODE", payload: "text" });
   };
 
   const handleClearSvg = () => {
     setSvgData(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    dispatch({ type: "SET_PRINT_MODE", payload: "text" });
   };
 
   const handleSelectFont = useCallback(
@@ -213,7 +205,7 @@ function MainApp() {
         return <QRCodeGenerator qrData={settings.qrData} onQrDataChange={(v: string) => dispatch({ type: "SET_QR_DATA", payload: v })} />;
       case "svg":
         return (
-          <div className="space-y-4">
+          <div>
             <input
               type="file"
               accept=".svg"
@@ -222,26 +214,17 @@ function MainApp() {
               style={{ display: "none" }}
             />
             <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
+              variant={svgData ? "destructive" : "outline"}
+              onClick={svgData ? handleClearSvg : () => fileInputRef.current?.click()}
               className="w-full"
             >
-              Load SVG
+              {svgData ? "Clear SVG" : "Load SVG"}
             </Button>
-            {svgData && (
-              <Button
-                variant="destructive"
-                onClick={handleClearSvg}
-                className="w-full"
-              >
-                Clear SVG
-              </Button>
-            )}
           </div>
         );
       case "png":
         return (
-          <div className="space-y-4">
+          <div>
             <input
               type="file"
               accept="image/png"
@@ -250,21 +233,12 @@ function MainApp() {
               style={{ display: "none" }}
             />
             <Button
-              variant="outline"
-              onClick={() => pngInputRef.current?.click()}
+              variant={pngFile ? "destructive" : "outline"}
+              onClick={pngFile ? handleClearPng : () => pngInputRef.current?.click()}
               className="w-full"
             >
-              Load PNG
+              {pngFile ? "Clear PNG" : "Load PNG"}
             </Button>
-            {pngFile && (
-              <Button
-                variant="destructive"
-                onClick={handleClearPng}
-                className="w-full"
-              >
-                Clear PNG
-              </Button>
-            )}
           </div>
         );
       default:
@@ -396,7 +370,7 @@ function MainApp() {
     if (!value || !onChange) return null;
 
     return (
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="flex items-center gap-2 flex-1 min-w-[120px]">
         <Slider min={10} max={200} step={1} value={value} onValueChange={onChange} className="flex-1" />
         <span className="text-xs text-muted-foreground tabular-nums w-8 text-right flex-shrink-0">{value[0]}%</span>
       </div>
@@ -470,7 +444,7 @@ function MainApp() {
         )}
       </div>
       {(alignmentControls() || scaleControl()) && (
-        <div className="flex items-center gap-2 px-4 pt-2">
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-2">
           {alignmentControls()}
           {scaleControl()}
         </div>
@@ -547,20 +521,10 @@ function MainApp() {
           />
         )}
 
-        {/* Mobile: tabbed layout */}
-        <div className="md:hidden">
-          <Tabs defaultValue="content">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="content">Content</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-            <TabsContent value="content" className="space-y-8">
-              {contentColumn}
-            </TabsContent>
-            <TabsContent value="preview">
-              {previewColumn}
-            </TabsContent>
-          </Tabs>
+        {/* Mobile: stacked layout */}
+        <div className="md:hidden space-y-4">
+          {contentColumn}
+          {previewColumn}
         </div>
 
         {/* Desktop: balanced two-column layout, matched height */}
