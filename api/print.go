@@ -30,6 +30,7 @@ type PrintRequest struct {
 	HorizontalAlignment    string  `json:"horizontal_alignment"`
 	VerticalAlignment      string  `json:"vertical_alignment"`
 	TextRotation           float64 `json:"text_rotation"`
+	TextAlign              string  `json:"text_align"`
 	SVGData        string  `json:"svg_data"`
 	SVGScale       float64 `json:"svg_scale"`
 	CustomHeightMM         float64 `json:"custom_height_mm"`
@@ -158,7 +159,11 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 		y = defaultPadding
 	}
 
-	err = brotherql.DrawText(img, req.Text, fontPath, scaledFontSize, x, y, req.TextRotation)
+	textAlign := req.TextAlign
+	if textAlign == "" {
+		textAlign = "left"
+	}
+	err = brotherql.DrawText(img, req.Text, fontPath, scaledFontSize, x, y, req.TextRotation, textAlign)
 	if err != nil {
 		return nil, fmt.Errorf("failed to draw text: %w", err)
 	}

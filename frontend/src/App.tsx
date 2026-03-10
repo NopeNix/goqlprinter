@@ -96,6 +96,7 @@ function MainApp() {
     horizontalAlignment: settings.horizontalAlignment,
     verticalAlignment: settings.verticalAlignment,
     textRotation: settings.textRotation,
+    textAlign: settings.printMode === 'text' ? settings.textAlign : undefined,
     svgData: settings.printMode === 'svg' ? svgData : null,
     svgScale: settings.svgScale[0] / 100,
     qrData: settings.printMode === 'qr' ? settings.qrData : undefined,
@@ -321,6 +322,8 @@ function MainApp() {
             ((value: "standard" | "rotated") => dispatch({ type: "SET_ORIENTATION", payload: value })) as (value: "standard" | "rotated") => void
           }
           orientationValue={settings.selectedOrientation as "standard" | "rotated"}
+          onTextAlignChange={(v: "left" | "center" | "right") => dispatch({ type: "SET_TEXT_ALIGN", payload: v })}
+          textAlignValue={settings.textAlign}
         />
       );
     }

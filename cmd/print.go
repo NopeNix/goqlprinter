@@ -156,7 +156,7 @@ func renderText(text string, label brotherql.LabelSize, fontPath string) (*image
 		y = padding
 	}
 
-	err = brotherql.DrawText(img, text, fontPath, scaledFontSize, x, y, flagRotation)
+	err = brotherql.DrawText(img, text, fontPath, scaledFontSize, x, y, flagRotation, "left")
 	if err != nil {
 		return nil, fmt.Errorf("failed to draw text: %w", err)
 	}

@@ -22,6 +22,7 @@ type PreviewRequest struct {
 	HorizontalAlignment    string  `json:"horizontal_alignment"`
 	VerticalAlignment      string  `json:"vertical_alignment"`
 	TextRotation           float64 `json:"text_rotation"`
+	TextAlign              string  `json:"text_align"`
 	SVGData                string  `json:"svg_data"`
 	SVGScale               float64 `json:"svg_scale"`
 	QRData                 string  `json:"qr_data"`
@@ -124,6 +125,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			HorizontalAlignment: req.HorizontalAlignment,
 			VerticalAlignment:   req.VerticalAlignment,
 			TextRotation:        req.TextRotation,
+			TextAlign:           req.TextAlign,
 			CustomHeightMM:      req.CustomHeightMM,
 		}
 		img, err = h.renderTextLabel(printReq, label)

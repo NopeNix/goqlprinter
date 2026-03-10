@@ -12,15 +12,20 @@ interface TextAlignmentSelectorProps {
   textRotationValue: number;
   onOrientationChange: (value: 'standard' | 'rotated') => void;
   orientationValue: 'standard' | 'rotated';
+  // Optional text-internal alignment (left/center/right within the text block)
+  onTextAlignChange?: (value: 'left' | 'center' | 'right') => void;
+  textAlignValue?: 'left' | 'center' | 'right';
 }
 
-const TextAlignmentSelector: React.FC<TextAlignmentSelectorProps> = ({ 
-  onHorizontalChange, 
-  onVerticalChange, 
-  horizontalValue, 
+const TextAlignmentSelector: React.FC<TextAlignmentSelectorProps> = ({
+  onHorizontalChange,
+  onVerticalChange,
+  horizontalValue,
   verticalValue,
   onTextRotationChange,
-  textRotationValue
+  textRotationValue,
+  onTextAlignChange,
+  textAlignValue,
 }) => {
   const handleHorizontalChange = (value: 'start' | 'center' | 'end' | '') => {
     // If the user deselects the toggle, default to 'center'
@@ -39,17 +44,34 @@ const TextAlignmentSelector: React.FC<TextAlignmentSelectorProps> = ({
     else onTextRotationChange(0);
   };
 
+  const handleTextAlignChange = (value: 'left' | 'center' | 'right' | '') => {
+    if (onTextAlignChange) onTextAlignChange(value || 'left');
+  };
+
   return (
     <div className="flex gap-1 items-center">
+      {onTextAlignChange && (
+        <ToggleGroup type="single" onValueChange={handleTextAlignChange} value={textAlignValue ?? 'left'} variant="outline" size="sm">
+          <ToggleGroupItem value="left" aria-label="Text align left" title="Text align left">
+            <AlignLeft className="h-4 w-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="center" aria-label="Text align center" title="Text align center">
+            <AlignCenter className="h-4 w-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="right" aria-label="Text align right" title="Text align right">
+            <AlignRight className="h-4 w-4" />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      )}
       <ToggleGroup type="single" onValueChange={handleHorizontalChange} value={horizontalValue} variant="outline" size="sm">
-        <ToggleGroupItem value="start" aria-label="Align left" title="Align left">
-          <AlignLeft className="h-4 w-4" />
+        <ToggleGroupItem value="start" aria-label="Block align left" title="Block align left">
+          <AlignVerticalJustifyEnd className="h-4 w-4 rotate-90" />
         </ToggleGroupItem>
-        <ToggleGroupItem value="center" aria-label="Align center" title="Align center">
-          <AlignCenter className="h-4 w-4" />
+        <ToggleGroupItem value="center" aria-label="Block align center" title="Block align center">
+          <AlignVerticalJustifyCenter className="h-4 w-4 rotate-90" />
         </ToggleGroupItem>
-        <ToggleGroupItem value="end" aria-label="Align right" title="Align right">
-          <AlignRight className="h-4 w-4" />
+        <ToggleGroupItem value="end" aria-label="Block align right" title="Block align right">
+          <AlignVerticalJustifyStart className="h-4 w-4 rotate-90" />
         </ToggleGroupItem>
       </ToggleGroup>
       <ToggleGroup type="single" onValueChange={handleVerticalChange} value={verticalValue} variant="outline" size="sm">

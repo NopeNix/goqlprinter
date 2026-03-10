@@ -124,6 +124,7 @@ export function usePrintJob({
         horizontal_alignment: settings.horizontalAlignment,
         vertical_alignment: settings.verticalAlignment,
         text_rotation: settings.textRotation,
+        text_align: settings.textAlign,
       };
     } else if (settings.printMode === "qr") {
       if (!settings.qrData) {

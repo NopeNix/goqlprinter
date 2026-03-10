@@ -43,6 +43,7 @@ export interface LabelSettings {
   horizontalAlignment: "start" | "center" | "end";
   verticalAlignment: "start" | "center" | "end";
   textRotation: number;
+  textAlign: "left" | "center" | "right";
 
   // Endless tape
   heightMode: "auto" | "manual";
@@ -67,6 +68,7 @@ export type LabelSettingsAction =
   | { type: "SET_HORIZONTAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_VERTICAL_ALIGNMENT"; payload: "start" | "center" | "end" }
   | { type: "SET_TEXT_ROTATION"; payload: number }
+  | { type: "SET_TEXT_ALIGN"; payload: "left" | "center" | "right" }
   | { type: "SET_HEIGHT_MODE"; payload: "auto" | "manual" }
   | { type: "SET_CUSTOM_HEIGHT_MM"; payload: number }
   | { type: "RESET" };
@@ -90,6 +92,7 @@ export const DEFAULT_SETTINGS: LabelSettings = {
   horizontalAlignment: "center",
   verticalAlignment: "center",
   textRotation: 0,
+  textAlign: "left",
   heightMode: "auto",
   customHeightMM: 0,
 };
@@ -139,6 +142,8 @@ function migrateFromOldFormat(saved: Record<string, unknown>): LabelSettings {
         DEFAULT_SETTINGS.verticalAlignment,
       textRotation:
         (saved.textRotation as number) ?? DEFAULT_SETTINGS.textRotation,
+      textAlign:
+        (saved.textAlign as "left" | "center" | "right") || DEFAULT_SETTINGS.textAlign,
       heightMode:
         (saved.heightMode as "auto" | "manual") || DEFAULT_SETTINGS.heightMode,
       customHeightMM:
@@ -197,6 +202,8 @@ function labelSettingsReducer(
       return { ...state, verticalAlignment: action.payload };
     case "SET_TEXT_ROTATION":
       return { ...state, textRotation: action.payload };
+    case "SET_TEXT_ALIGN":
+      return { ...state, textAlign: action.payload };
     case "SET_HEIGHT_MODE":
       return { ...state, heightMode: action.payload };
     case "SET_CUSTOM_HEIGHT_MM":

@@ -10,6 +10,7 @@ interface UsePreviewParams {
   horizontalAlignment: string;
   verticalAlignment: string;
   textRotation: number;
+  textAlign?: string;
   // SVG optional
   svgData?: string | null;
   svgScale?: number;
@@ -40,6 +41,7 @@ interface PreviewRequest {
   horizontal_alignment: string;
   vertical_alignment: string;
   text_rotation: number;
+  text_align?: string;
   svg_data?: string;
   svg_scale?: number;
   qr_data?: string;
@@ -71,6 +73,7 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     horizontalAlignment,
     verticalAlignment,
     textRotation,
+    textAlign,
     svgData,
     svgScale,
     qrData,
@@ -106,6 +109,7 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
         horizontal_alignment: horizontalAlignment,
         vertical_alignment: verticalAlignment,
         text_rotation: textRotation,
+        ...(textAlign && { text_align: textAlign }),
       };
 
       // Add custom height for endless tape
@@ -172,6 +176,7 @@ export function usePreview(params: UsePreviewParams): UsePreviewResult {
     horizontalAlignment,
     verticalAlignment,
     textRotation,
+    textAlign,
     svgData,
     svgScale,
     qrData,

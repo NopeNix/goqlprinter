@@ -171,7 +171,7 @@ func TestDrawText_WithFont(t *testing.T) {
 	}
 
 	img := CreateBlankImage(300, 100)
-	err := DrawText(img, "Test", fontPath, 20, 0, 0, 0)
+	err := DrawText(img, "Test", fontPath, 20, 0, 0, 0, "left")
 	if err != nil {
 		t.Fatalf("DrawText returned error: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestDrawText_EmptyTextIsNoop(t *testing.T) {
 	t.Parallel()
 
 	img := CreateBlankImage(100, 50)
-	err := DrawText(img, "", "nonexistent.ttf", 12, 0, 0, 0)
+	err := DrawText(img, "", "nonexistent.ttf", 12, 0, 0, 0, "left")
 	if err != nil {
 		t.Errorf("DrawText with empty text returned error: %v, want nil", err)
 	}
@@ -288,7 +288,7 @@ func TestDrawText_WithRotation(t *testing.T) {
 	}
 
 	img := CreateBlankImage(300, 300)
-	err := DrawText(img, "Rotated", fontPath, 20, 50, 50, 90)
+	err := DrawText(img, "Rotated", fontPath, 20, 50, 50, 90, "left")
 	if err != nil {
 		t.Fatalf("DrawText with rotation returned error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestDrawText_InvalidFont(t *testing.T) {
 	t.Parallel()
 
 	img := CreateBlankImage(100, 50)
-	err := DrawText(img, "Hello", "/nonexistent/font.ttf", 12, 0, 0, 0)
+	err := DrawText(img, "Hello", "/nonexistent/font.ttf", 12, 0, 0, 0, "left")
 	if err == nil {
 		t.Error("expected error for invalid font path, got nil")
 	}
