@@ -17,6 +17,7 @@ frontend/.claude/
 
 # Debug
 debug_output/
+*.log
 
 # IDE
 .idea/
@@ -30,3 +31,4 @@ Thumbs.db
 /.claude
 /.playwright-cli
 /backend_go
+
