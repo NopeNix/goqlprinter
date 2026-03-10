@@ -83,7 +83,7 @@ func TestPackBits(t *testing.T) {
 		},
 		{
 			name:  "all zeros (run-length)",
-			input: bytes.Repeat([]byte{0x00}, 10),
+			input: make([]byte, 10),
 			check: func(t *testing.T, result []byte) {
 				// 10-byte run: control = 1 - 10 = -9 = 0xF7, data = 0x00
 				if len(result) != 2 {

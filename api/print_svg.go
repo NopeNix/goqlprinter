@@ -76,16 +76,16 @@ func convertToGrayscale(img image.Image) *image.Gray {
 // PrintSVGRequest defines the structure for SVG printing
 // @description Request body for printing SVG labels
 type PrintSVGRequest struct {
-	LabelSize              string  `json:"label_size" binding:"required"`
-	SVGData                string  `json:"svg_data" binding:"required"`
-	Printer                string  `json:"printer"` // Optional
-	Model                  string  `json:"model"`   // Optional
-	SVGScale               float64 `json:"svg_scale"`
-	Orientation            string  `json:"orientation"`
-	ContentRotation        float64 `json:"content_rotation"`
-	HorizontalAlignment    string  `json:"horizontal_alignment"`
-	VerticalAlignment      string  `json:"vertical_alignment"`
-	CustomHeightMM         float64 `json:"custom_height_mm"`
+	LabelSize           string  `json:"label_size" binding:"required"`
+	SVGData             string  `json:"svg_data" binding:"required"`
+	Printer             string  `json:"printer"` // Optional
+	Model               string  `json:"model"`   // Optional
+	SVGScale            float64 `json:"svg_scale"`
+	Orientation         string  `json:"orientation"`
+	ContentRotation     float64 `json:"content_rotation"`
+	HorizontalAlignment string  `json:"horizontal_alignment"`
+	VerticalAlignment   string  `json:"vertical_alignment"`
+	CustomHeightMM      float64 `json:"custom_height_mm"`
 }
 
 // PrintSVG godoc
@@ -118,7 +118,7 @@ func (h *Handlers) PrintSVG(c *gin.Context) {
 		return
 	}
 
-	if req.Printer == "file" {
+	if req.Printer == printerFile {
 		saveDebugOutput(c, img, "label_svg", req.Model, req.Orientation)
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handlers) PrintSVG(c *gin.Context) {
 // fitted within the printable area, and positioned according to alignment
 // — matching the approach used for text labels.
 func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelSize) (*image.Gray, error) {
-	isRotated := req.Orientation == "rotated"
+	isRotated := req.Orientation == orientRotated
 
 	scale := req.SVGScale
 	if scale <= 0 {
@@ -211,9 +211,9 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 	// Horizontal alignment.
 	var xPos int
 	switch req.HorizontalAlignment {
-	case "start":
+	case alignStart:
 		xPos = defaultPadding
-	case "end":
+	case alignEnd:
 		xPos = canvasWidth - svgW - defaultPadding
 	default: // "center" or unspecified
 		xPos = (canvasWidth - svgW) / 2
@@ -230,9 +230,9 @@ func processSVG(ctx context.Context, req PrintSVGRequest, label brotherql.LabelS
 	// Vertical alignment.
 	var yPos int
 	switch req.VerticalAlignment {
-	case "center":
+	case alignCenter:
 		yPos = (canvasHeight - svgH) / 2
-	case "end":
+	case alignEnd:
 		yPos = canvasHeight - svgH - defaultPadding
 	default: // "start" or unspecified
 		yPos = defaultPadding

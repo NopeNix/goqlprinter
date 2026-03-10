@@ -16,7 +16,7 @@ type PrinterModel struct {
 }
 
 // GetModel returns the protocol parameters for the named printer model.
-// If the model is not recognised, it returns QL-800 defaults and a non-nil error.
+// If the model is not recognized, it returns QL-800 defaults and a non-nil error.
 func GetModel(name string) (PrinterModel, error) {
 	models := map[string]PrinterModel{
 		// QL-5xx series: older models, no raster mode switch support.

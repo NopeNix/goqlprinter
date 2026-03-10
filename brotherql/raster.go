@@ -155,7 +155,7 @@ func MeasureText(text string, fontPath string, size float64) (int, int, error) {
 	lines := strings.Split(text, "\n")
 
 	if len(lines) == 1 {
-		// Original single-line behaviour.
+		// Original single-line behavior.
 		bounds, advance := d.BoundString(text)
 
 		advanceWidth := advance.Round()

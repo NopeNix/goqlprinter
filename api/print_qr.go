@@ -40,7 +40,7 @@ type PrintQRRequest struct {
 // @Router /print_qr [post]
 // processQR renders a QR code image with scale and alignment, returning the image.
 func processQR(req PrintQRRequest, label brotherql.LabelSize) (*image.Gray, error) {
-	isRotated := req.Orientation == "rotated"
+	isRotated := req.Orientation == orientRotated
 
 	scale := req.QRScale
 	if scale <= 0 {
@@ -110,9 +110,9 @@ func processQR(req PrintQRRequest, label brotherql.LabelSize) (*image.Gray, erro
 	// Calculate position based on alignment.
 	var xPos int
 	switch req.HorizontalAlignment {
-	case "start":
+	case alignStart:
 		xPos = defaultPadding
-	case "end":
+	case alignEnd:
 		xPos = canvasWidth - qrSize - defaultPadding
 	default:
 		xPos = (canvasWidth - qrSize) / 2
@@ -120,9 +120,9 @@ func processQR(req PrintQRRequest, label brotherql.LabelSize) (*image.Gray, erro
 
 	var yPos int
 	switch req.VerticalAlignment {
-	case "start":
+	case alignStart:
 		yPos = defaultPadding
-	case "end":
+	case alignEnd:
 		yPos = canvasHeight - qrSize - defaultPadding
 	default:
 		yPos = (canvasHeight - qrSize) / 2
@@ -146,7 +146,7 @@ func processQR(req PrintQRRequest, label brotherql.LabelSize) (*image.Gray, erro
 
 	err := brotherql.DrawQRCode(img, req.Data, xPos, yPos, qrSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to draw QR code: %v", err)
+		return nil, fmt.Errorf("failed to draw QR code: %w", err)
 	}
 
 	// Apply content rotation if requested.
@@ -189,7 +189,7 @@ func (h *Handlers) PrintQR(c *gin.Context) {
 		return
 	}
 
-	if req.Printer == "file" {
+	if req.Printer == printerFile {
 		saveDebugOutput(c, img, "label_qr", req.Model, req.Orientation)
 		return
 	}

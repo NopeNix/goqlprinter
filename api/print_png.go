@@ -8,7 +8,6 @@ import (
 	"image/draw"
 	"image/png"
 	"net/http"
-	"os"
 
 	"goqlprinter/brotherql"
 	"goqlprinter/internal/services"
@@ -62,7 +61,7 @@ func (h *Handlers) PrintPNGLabel(c *gin.Context) {
 		return
 	}
 
-	if payload.Printer == "file" {
+	if payload.Printer == printerFile {
 		saveDebugOutput(c, grayImg, "label_png", payload.Model, payload.Orientation)
 		return
 	}
@@ -95,7 +94,7 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 		return nil, fmt.Errorf("invalid PNG file: %w", err)
 	}
 
-	isRotated := payload.Orientation == "rotated"
+	isRotated := payload.Orientation == orientRotated
 
 	scale := payload.PNGScale
 	if scale <= 0 {
@@ -191,9 +190,9 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 	// Horizontal alignment.
 	var xPos int
 	switch payload.HorizontalAlignment {
-	case "start":
+	case alignStart:
 		xPos = defaultPadding
-	case "end":
+	case alignEnd:
 		xPos = canvasWidth - pngW - defaultPadding
 	default: // "center" or unspecified
 		xPos = (canvasWidth - pngW) / 2
@@ -208,9 +207,9 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 	// Vertical alignment.
 	var yPos int
 	switch payload.VerticalAlignment {
-	case "center":
+	case alignCenter:
 		yPos = (canvasHeight - pngH) / 2
-	case "end":
+	case alignEnd:
 		yPos = canvasHeight - pngH - defaultPadding
 	default: // "start" or unspecified
 		yPos = defaultPadding
@@ -229,12 +228,4 @@ func processPNG(payload PrintPNGPayload, label brotherql.LabelSize) (*image.Gray
 		draw.Over)
 
 	return canvas, nil
-}
-
-func writeFile(filename string, data []byte) error {
-	err := os.MkdirAll("debug_output", 0750)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filename, data, 0600)
 }

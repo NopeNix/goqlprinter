@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
@@ -41,7 +40,7 @@ var statusCmd = &cobra.Command{
 			}
 
 			var cmdBuf []byte
-			cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...)
+			cmdBuf = append(cmdBuf, make([]byte, 200)...)
 			cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)
 			if _, err := backend.Write(cmdBuf); err != nil {
 				return fmt.Errorf("failed to send status request: %w", err)

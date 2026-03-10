@@ -182,7 +182,7 @@ func (p *BrotherQL) Print(img image.Image, label LabelSize) error {
 // previous failed print, then drains any stale status bytes the printer queued.
 func (p *BrotherQL) resetAndDrain(model PrinterModel) error {
 	var resetBuf bytes.Buffer
-	resetBuf.Write(bytes.Repeat([]byte{0x00}, model.InvalidateBytes))
+	resetBuf.Write(make([]byte, model.InvalidateBytes))
 	resetBuf.Write([]byte{0x1B, 0x40}) // ESC @: initialize
 	if _, err := p.backend.Write(resetBuf.Bytes()); err != nil {
 		return fmt.Errorf("failed to send reset: %w", err)

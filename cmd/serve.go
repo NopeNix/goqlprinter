@@ -80,14 +80,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 		gin.SetMode(os.Getenv("GIN_MODE"))
 	}
 
-	if strings.ToUpper(logLevel) == "DEBUG" {
+	switch {
+	case strings.EqualFold(logLevel, "DEBUG"):
 		gin.DefaultWriter = os.Stdout
 		gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
 			slog.Debug("route registered", "method", httpMethod, "path", absolutePath, "handler", handlerName)
 		}
-	} else if strings.ToUpper(logLevel) == "ERROR" {
+	case strings.EqualFold(logLevel, "ERROR"):
 		gin.DefaultWriter = io.Discard
-	} else {
+	default:
 		gin.DefaultWriter = os.Stdout
 	}
 
@@ -100,7 +101,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	r := gin.New()
 	if logLevel != "ERROR" {
 		r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-			return fmt.Sprintf("[%s] %s %s %d %s \"%s\"\n",
+			return fmt.Sprintf("[%s] %s %s %d %s %q\n",
 				param.TimeStamp.Format("2006-01-02 15:04:05"),
 				param.Method,
 				param.Path,

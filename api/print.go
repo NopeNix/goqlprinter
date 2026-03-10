@@ -15,25 +15,31 @@ import (
 const (
 	defaultModel   = "QL-820NWB"
 	defaultPadding = 10
+
+	printerFile   = "file"
+	orientRotated = "rotated"
+	alignStart    = "start"
+	alignCenter   = "center"
+	alignEnd      = "end"
 )
 
 // PrintRequest defines the structure for the print request
 // @description Request body for printing labels with text or SVG content
 type PrintRequest struct {
-	Text                   string  `json:"text"`
-	LabelSize              string  `json:"label_size" binding:"required"`
-	FontFamily             string  `json:"font_family"`
-	FontSize               float64 `json:"font_size"`
-	Printer                string  `json:"printer"` // e.g., "QL-800", "usb:001:005" or "file" (optional)
-	Model                  string  `json:"model"`   // e.g., "QL-800" (optional)
-	Orientation            string  `json:"orientation"`
-	HorizontalAlignment    string  `json:"horizontal_alignment"`
-	VerticalAlignment      string  `json:"vertical_alignment"`
-	TextRotation           float64 `json:"text_rotation"`
-	TextAlign              string  `json:"text_align"`
-	SVGData        string  `json:"svg_data"`
-	SVGScale       float64 `json:"svg_scale"`
-	CustomHeightMM         float64 `json:"custom_height_mm"`
+	Text                string  `json:"text"`
+	LabelSize           string  `json:"label_size" binding:"required"`
+	FontFamily          string  `json:"font_family"`
+	FontSize            float64 `json:"font_size"`
+	Printer             string  `json:"printer"` // e.g., "QL-800", "usb:001:005" or "file" (optional)
+	Model               string  `json:"model"`   // e.g., "QL-800" (optional)
+	Orientation         string  `json:"orientation"`
+	HorizontalAlignment string  `json:"horizontal_alignment"`
+	VerticalAlignment   string  `json:"vertical_alignment"`
+	TextRotation        float64 `json:"text_rotation"`
+	TextAlign           string  `json:"text_align"`
+	SVGData             string  `json:"svg_data"`
+	SVGScale            float64 `json:"svg_scale"`
+	CustomHeightMM      float64 `json:"custom_height_mm"`
 }
 
 // mmToDots converts millimeters to dots at 300 DPI.
@@ -44,14 +50,14 @@ func mmToDots(mm float64) int {
 // rotateForPrinter rotates a "rotated"-orientation image 90° so that its
 // width matches the print head. Standard-orientation images are returned as-is.
 func rotateForPrinter(img *image.Gray, orientation string) *image.Gray {
-	if orientation == "rotated" {
+	if orientation == orientRotated {
 		return brotherql.RotateImage(img, 90)
 	}
 	return img
 }
 
 // saveDebugOutput saves img to a debug PNG file (and its raster variant) and
-// writes a JSON response. It is used by all print handlers when printer == "file".
+// writes a JSON response. It is used by all print handlers when printer == printerFile.
 // orientation controls whether the raster variant is rotated to match the print head.
 func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model string, orientation string) {
 	timestamp := time.Now().Format("20060102150405")
@@ -80,7 +86,7 @@ func saveDebugOutput(c *gin.Context, img *image.Gray, prefix string, model strin
 
 // renderTextLabel renders text onto a grayscale image sized for the given label.
 func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) (*image.Gray, error) {
-	isRotated := req.Orientation == "rotated"
+	isRotated := req.Orientation == orientRotated
 
 	fontPath, err := h.Fonts.GetFontPath(req.FontFamily)
 	if err != nil {
@@ -137,11 +143,11 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 
 	var x int
 	switch req.HorizontalAlignment {
-	case "start":
+	case alignStart:
 		x = defaultPadding
-	case "center":
+	case alignCenter:
 		x = (canvasWidth - textBoundsWidth) / 2
-	case "end":
+	case alignEnd:
 		x = canvasWidth - textBoundsWidth - defaultPadding
 	default:
 		x = defaultPadding
@@ -149,11 +155,11 @@ func (h *Handlers) renderTextLabel(req PrintRequest, label brotherql.LabelSize) 
 
 	var y int
 	switch req.VerticalAlignment {
-	case "start":
+	case alignStart:
 		y = defaultPadding
-	case "center":
+	case alignCenter:
 		y = (canvasHeight - textBoundsHeight) / 2
-	case "end":
+	case alignEnd:
 		y = canvasHeight - textBoundsHeight - defaultPadding
 	default:
 		y = defaultPadding
@@ -224,7 +230,7 @@ func (h *Handlers) PrintLabel(c *gin.Context) {
 		}
 	}
 
-	if req.Printer == "file" {
+	if req.Printer == printerFile {
 		saveDebugOutput(c, img, "label", req.Model, req.Orientation)
 		return
 	}

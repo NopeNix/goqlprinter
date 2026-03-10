@@ -2,8 +2,7 @@ version: "2"
 
 formatters:
   enable:
-    - goimports   # gofmt + import-järjestys
-
+    - goimports
   settings:
     goimports:
       local-prefixes:
@@ -12,35 +11,65 @@ formatters:
 linters:
   default: none
   enable:
-    # Correctness
-    - errcheck       # unhandled errors
-    - govet          # go vet checks
-    - staticcheck    # static analysis (SA*, S*, QF*)
-    - unused         # unused code
+    # --- Correctness ---
+    - errcheck        # unhandled errors
+    - govet           # go vet checks
+    - staticcheck     # static analysis (SA*, S*, QF*)
+    - unused          # unused code
+    - bodyclose       # HTTP response body not closed
+    - noctx           # HTTP requests without context
+    - copyloopvar     # loop variable capture
+    - intrange        # prefer integer range (Go 1.22+)
+    - durationcheck   # two durations multiplied
+    - forcetypeassert # unguarded type assertions
+    - errorlint       # error wrapping (Go 1.13+)
+    - fatcontext      # context in loops
 
-    # Style & idioms
-    - misspell       # typos in comments/strings
-    - unconvert      # unnecessary type conversions
-    - predeclared    # shadowing built-ins
-
-    # Bugs
-    - bodyclose      # HTTP response body not closed
-    - noctx          # HTTP requests without context
-    - copyloopvar    # loop variable capture
-    - intrange       # prefer range over int (Go 1.22+)
-
-    # Security
+    # --- Security ---
     - gosec
+
+    # --- Style / idioms ---
+    - misspell        # typos in comments/strings
+    - unconvert       # unnecessary type conversions
+    - predeclared     # shadowing built-ins
+    - goconst         # repeated strings → constants
+    - dupword         # duplicate words in comments
+
+    # --- Complexity (catch extremes only) ---
+    - gocyclo
+    - funlen
+
+    # --- Bugs / perf ---
+    - gocritic
 
   settings:
     gosec:
       excludes:
-        - G304  # File path from variable — debug-output käyttää tarkoituksella
-        - G115  # Integer overflow conversion — protokollakoodi, intentionaaliset byte-konversiot
+        - G304  # file path from variable — debug-output intentional
+        - G115  # integer overflow — protocol byte conversions intentional
 
     misspell:
+      locale: US
       ignore-rules:
-        - marginaali  # suomenkielinen sana kommentissa
+        - marginaali  # Finnish word in comments
+
+    goconst:
+      min-len: 4
+      min-occurrences: 3
+
+    gocyclo:
+      min-complexity: 35
+
+    funlen:
+      lines: 150
+      statements: 80
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam   # false positives on image/raster structs
 
   exclusions:
     rules:
@@ -48,4 +77,11 @@ linters:
         linters:
           - errcheck
           - gosec
-          - noctx  # httptest.NewRequest ilman kontekstia on normaalia testeissä
+          - noctx
+          - funlen
+          - goconst
+
+      # Platform-specific backends: unused symbols expected
+      - path: "native_.*\\.go"
+        linters:
+          - unused

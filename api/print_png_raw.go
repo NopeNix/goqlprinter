@@ -104,7 +104,7 @@ func (h *Handlers) PrintPNGRaw(c *gin.Context) {
 	printer := c.PostForm("printer")
 	model := c.PostForm("model")
 
-	if printer == "file" {
+	if printer == printerFile {
 		filename := "debug_output/labelpng_raw_" + strconv.FormatInt(time.Now().UnixNano(), 10) + ".png"
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, grayImg); err != nil {

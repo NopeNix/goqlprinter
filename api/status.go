@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -73,8 +72,8 @@ func (h *Handlers) GetStatus(c *gin.Context) {
 
 		// Send invalidate + status request
 		var cmdBuf []byte
-		cmdBuf = append(cmdBuf, bytes.Repeat([]byte{0x00}, 200)...) // invalidate buffer
-		cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)                   // ESC i S: status request
+		cmdBuf = append(cmdBuf, make([]byte, 200)...) // invalidate buffer
+		cmdBuf = append(cmdBuf, 0x1B, 0x69, 0x53)     // ESC i S: status request
 
 		if _, err := backend.Write(cmdBuf); err != nil {
 			return fmt.Errorf("failed to send status request: %w", err)

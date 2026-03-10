@@ -1,0 +1,10 @@
+[tools]
+go = "1.26.0"
+node = "22"
+just = "latest"
+git-cliff = "latest"
+golangci-lint = "latest"
+
+[env]
+# Go binaries (go install'd tools) on PATH
+GOPATH = "{{env.HOME}}/go"

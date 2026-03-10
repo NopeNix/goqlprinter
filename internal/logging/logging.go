@@ -1,4 +1,4 @@
-// Package logging initialises the default slog logger for the application.
+// Package logging initializes the default slog logger for the application.
 package logging
 
 import (

@@ -115,7 +115,7 @@ func (p *LinuxProvider) FindPrinters() ([]PrinterInfo, error) {
 
 		// /sys/class/usbmisc/<dev>/device points to the USB interface (e.g. 1-1:1.0).
 		// idVendor lives one directory up at the USB device level.
-		deviceSymlink := filepath.Join("/sys/class/usbmisc", deviceName, "device")
+		deviceSymlink := filepath.Join("/sys", "class", "usbmisc", deviceName, "device") //nolint:gocritic
 
 		interfacePath, err := filepath.EvalSymlinks(deviceSymlink)
 		if err != nil {

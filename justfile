@@ -5,6 +5,13 @@ ldflags := "-ldflags \"-X main.version=" + version + " -X main.buildDate=" + bui
 out_dir := "dist"
 build_deps := justfile_directory() / "build_deps"
 
+# Ports: env var > first free port starting from default
+API_PORT  := env_var_or_default("LABELPRINTER_PORT", `python3 -c "import socket;f=lambda p:(s:=socket.socket(),r:=s.connect_ex(('localhost',p)),s.close(),r)[-1];r=next((8000+i for i in range(5)if f(8000+i)),0);print(r or(s:=socket.socket(),s.bind(('',0)),s.getsockname()[1],s.close())[2])"`)
+VITE_PORT := env_var_or_default("VITE_PORT",         `python3 -c "import socket;f=lambda p:(s:=socket.socket(),r:=s.connect_ex(('localhost',p)),s.close(),r)[-1];r=next((5173+i for i in range(5)if f(5173+i)),0);print(r or(s:=socket.socket(),s.bind(('',0)),s.getsockname()[1],s.close())[2])"`)
+
+API_URL  := "http://localhost:" + API_PORT
+VITE_URL := "http://localhost:" + VITE_PORT
+
 # Show available commands
 default:
     @just --list
@@ -19,13 +26,16 @@ build:
 serve:
     go run . serve
 
-# Dev: Go backend + Vite devserver concurrently, log to file + screen (Ctrl+C stops both)
+# Dev: Go backend + Vite devserver concurrently (Ctrl+C stops both)
 dev:
-    #!/usr/bin/env bash
-    trap 'kill 0' SIGINT
-    LOG_LEVEL=DEBUG go run . serve 2>&1 | tee debug_log.log &
-    cd frontend && npm run dev &
-    wait
+    @echo "API: {{API_URL}}"
+    @echo "WEB: {{VITE_URL}}"
+    npx concurrently \
+      --names "API,WEB" \
+      --prefix-colors "cyan,magenta" \
+      --kill-others \
+      "LOG_LEVEL=DEBUG LABELPRINTER_PORT={{API_PORT}} go run . serve >debug_log.log 2>&1" \
+      "cd frontend && VITE_API_PORT={{API_PORT}} npm run dev -- --port {{VITE_PORT}} --strictPort"
 
 # ─── CLI shortcuts ──────────────────────────────────────
 
@@ -143,6 +153,58 @@ test-qr: (run-raster-test "scripts/test_qr.py")
 
 # Run all raster tests (SVG + QR)
 test-raster: (run-raster-test "scripts/test_svg.py" "scripts/test_qr.py")
+
+# ─── Lint & Format ──────────────────────────────────────
+
+# Run Go linter
+lint:
+    golangci-lint run
+
+# Run Go linter and auto-fix what's possible
+lint-fix:
+    golangci-lint run --fix
+
+# Run frontend linter
+lint-frontend:
+    cd frontend && npm run lint
+
+# Lint everything
+lint-all: lint lint-frontend
+
+# ─── Changelog & Release ────────────────────────────────
+
+# Generate full CHANGELOG.md from git history
+changelog:
+    git-cliff -o CHANGELOG.md
+    @echo "CHANGELOG.md updated"
+
+# Prepend unreleased commits to CHANGELOG.md
+changelog-unreleased:
+    git-cliff --unreleased --prepend CHANGELOG.md
+    @echo "Unreleased changes prepended to CHANGELOG.md"
+
+# Tag and commit a release using version from VERSION file
+# Usage: just release
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION="v$(cat VERSION)"
+    echo "Releasing $VERSION..."
+    # Check working tree is clean (allow staged files)
+    if ! git diff --quiet; then
+        echo "ERROR: Unstaged changes present. Commit or stash them first." >&2
+        exit 1
+    fi
+    if git tag | grep -qx "$VERSION"; then
+        echo "ERROR: Tag $VERSION already exists." >&2
+        exit 1
+    fi
+    git-cliff --tag "$VERSION" -o CHANGELOG.md
+    git add CHANGELOG.md VERSION
+    git commit -m "chore: release $VERSION"
+    git tag -a "$VERSION" -m "Release $VERSION"
+    git push && git push --tags
+    echo "Released and pushed $VERSION"
 
 # ─── Utilities ──────────────────────────────────────────
 

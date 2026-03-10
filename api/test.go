@@ -132,9 +132,9 @@ func (h *Handlers) TestFeed(c *gin.Context) {
 // @Router /test/set_media_and_feed [post]
 func (h *Handlers) TestSetMediaAndFeed(c *gin.Context) {
 	var buf bytes.Buffer
-	buf.Write(bytes.Repeat([]byte{0x00}, 200)) // invalidate
-	buf.Write([]byte{0x1b, 0x40})              // ESC @: initialize
-	buf.Write([]byte{0x1b, 0x69, 0x61, 0x01})  // ESC i a: select raster mode
+	buf.Write(make([]byte, 200))              // invalidate
+	buf.Write([]byte{0x1b, 0x40})             // ESC @: initialize
+	buf.Write([]byte{0x1b, 0x69, 0x61, 0x01}) // ESC i a: select raster mode
 
 	// ESC i z: set media and quality (62mm x 29mm die-cut as test fixture)
 	mediaCmd := []byte{0x1b, 0x69, 0x7a}

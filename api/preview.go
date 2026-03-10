@@ -14,22 +14,22 @@ import (
 
 // PreviewRequest defines the structure for the preview request
 type PreviewRequest struct {
-	Text                   string  `json:"text"`
-	LabelSize              string  `json:"label_size" binding:"required"`
-	FontFamily             string  `json:"font_family"`
-	FontSize               float64 `json:"font_size"`
-	Orientation            string  `json:"orientation"`
-	HorizontalAlignment    string  `json:"horizontal_alignment"`
-	VerticalAlignment      string  `json:"vertical_alignment"`
-	TextRotation           float64 `json:"text_rotation"`
-	TextAlign              string  `json:"text_align"`
-	SVGData                string  `json:"svg_data"`
-	SVGScale               float64 `json:"svg_scale"`
-	QRData                 string  `json:"qr_data"`
-	QRScale                float64 `json:"qr_scale"`
-	PNGData                string  `json:"png_data"`
-	PNGScale               float64 `json:"png_scale"`
-	CustomHeightMM         float64 `json:"custom_height_mm"`
+	Text                string  `json:"text"`
+	LabelSize           string  `json:"label_size" binding:"required"`
+	FontFamily          string  `json:"font_family"`
+	FontSize            float64 `json:"font_size"`
+	Orientation         string  `json:"orientation"`
+	HorizontalAlignment string  `json:"horizontal_alignment"`
+	VerticalAlignment   string  `json:"vertical_alignment"`
+	TextRotation        float64 `json:"text_rotation"`
+	TextAlign           string  `json:"text_align"`
+	SVGData             string  `json:"svg_data"`
+	SVGScale            float64 `json:"svg_scale"`
+	QRData              string  `json:"qr_data"`
+	QRScale             float64 `json:"qr_scale"`
+	PNGData             string  `json:"png_data"`
+	PNGScale            float64 `json:"png_scale"`
+	CustomHeightMM      float64 `json:"custom_height_mm"`
 }
 
 // PreviewResponse defines the response structure
@@ -67,7 +67,8 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 
 	var img *image.Gray
 
-	if req.SVGData != "" {
+	switch {
+	case req.SVGData != "":
 		svgReq := PrintSVGRequest{
 			LabelSize:           req.LabelSize,
 			SVGData:             req.SVGData,
@@ -83,7 +84,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-	} else if req.QRData != "" {
+	case req.QRData != "":
 		qrReq := PrintQRRequest{
 			LabelSize:           req.LabelSize,
 			Data:                req.QRData,
@@ -99,7 +100,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-	} else if req.PNGData != "" {
+	case req.PNGData != "":
 		pngReq := PrintPNGPayload{
 			LabelSize:           req.LabelSize,
 			PNGData:             req.PNGData,
@@ -115,7 +116,7 @@ func (h *Handlers) PreviewLabel(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-	} else {
+	default:
 		printReq := PrintRequest{
 			Text:                req.Text,
 			LabelSize:           req.LabelSize,

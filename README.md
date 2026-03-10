@@ -9,6 +9,7 @@ Web-based label printing interface for Brother QL thermal printers. Provides a R
 ## Features
 
 - Print text labels with font and alignment control
+- Multiline text with per-line alignment
 - Generate and print QR codes
 - Print SVG and PNG images
 - Live label preview before printing
@@ -37,7 +38,11 @@ just install-frontend
 just dev
 ```
 
-Open http://localhost:5173 in your browser.
+This starts two servers concurrently:
+- **http://localhost:5173** — Vite frontend with hot reload (use this in dev)
+- **http://localhost:8000** — Go backend API
+
+Open http://localhost:5173 in your browser during development. In production, the binary serves everything from port 8000.
 
 ## Building
 
