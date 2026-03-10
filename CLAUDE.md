@@ -22,6 +22,8 @@ Go-based backend + embedded React frontend for Brother QL label printer web GUI.
   - `native_*.go`: Platform-specific backends (Linux/macOS/Windows)
   - `usb_backend.go`: USB communication (gousb, CGO)
 - **`api/`**: REST handlers with `Handlers` DI struct (`PrinterService`, `FontService`, `Config`)
+  - `middleware.go`: Bearer token auth (constant-time comparison)
+  - `sse.go`: Server-Sent Events hub for real-time printer status
 - **`internal/services/`**: `PrinterService` (discovery), `FontService` (fonts), `PrinterLock` (mutex)
 - **`internal/config/`**: Viper-based config (JSON files + env vars)
 - **`frontend/`**: React 18 + TypeScript + Tailwind CSS (Vite)
@@ -42,6 +44,10 @@ go mod tidy         # Clean up dependencies
 Config priority (low→high):
 1. Defaults → 2. `/etc/labelprinter/config.json` → 3. `~/.labelprinter/config.json` → 4. `./config/config.json` → 5. `LABELPRINTER_*` env vars
 
+### Security
+- **HTTPS**: `server.tls=true` + `server.cert_file` + `server.key_file` (env: `LABELPRINTER_SERVER_TLS/CERT_FILE/KEY_FILE`)
+- **Auth**: `server.token` sets Bearer token for all `/api/*` routes (env: `LABELPRINTER_SERVER_TOKEN`)
+
 ### Debug
 - `printer: "file"` in API requests → saves PNG to `debug_output/`
 - Verbose logging enabled by default
@@ -55,6 +61,7 @@ Config priority (low→high):
 | GET | `/api/fonts` | List fonts |
 | GET | `/api/label-sizes` | All label formats |
 | GET | `/api/label-sizes/:id` | Single label details |
+| GET | `/api/events` | SSE printer status stream |
 | POST | `/api/print` | Print text/SVG label |
 | POST | `/api/print_svg` | Print SVG (needs rsvg-convert) |
 | POST | `/api/print_png` | Print base64 PNG |

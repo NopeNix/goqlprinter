@@ -35,6 +35,7 @@
 | GET | `/api/fonts` | GetFonts | List available fonts |
 | GET | `/api/label-sizes` | GetLabelSizes | All label formats |
 | GET | `/api/label-sizes/:id` | GetLabelSize | Single label details |
+| GET | `/api/events` | SSEHub | Server-Sent Events for printer status |
 | POST | `/api/print` | PrintLabel | Print text/SVG label |
 | POST | `/api/print_svg` | PrintSVG | Print SVG (needs rsvg-convert) |
 | POST | `/api/print_png` | PrintPNGLabel | Print base64 PNG |
@@ -47,3 +48,12 @@
 ## Config Priority (low→high)
 
 1. Defaults → 2. `/etc/labelprinter/config.json` → 3. `~/.labelprinter/config.json` → 4. `./config/config.json` → 5. `LABELPRINTER_*` env vars
+
+## Security Config
+
+| Config Key | Env Var | Purpose |
+|------------|---------|---------|
+| `server.tls` | `LABELPRINTER_SERVER_TLS` | Enable HTTPS |
+| `server.cert_file` | `LABELPRINTER_SERVER_CERT_FILE` | TLS certificate path |
+| `server.key_file` | `LABELPRINTER_SERVER_KEY_FILE` | TLS private key path |
+| `server.token` | `LABELPRINTER_SERVER_TOKEN` | Bearer auth token (all /api/*) |

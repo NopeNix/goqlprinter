@@ -9,6 +9,7 @@
 - Pad raster rows to full `RasterWidthBytes` (90 or 162)
 - Handle `printer: "file"` for debug output to `debug_output/`
 - Use `Backend` interface, never concrete types in handlers
+- Use `crypto/subtle.ConstantTimeCompare` for token comparison
 
 **MUST NOT:**
 - Send concurrent commands to same printer (mutex required)
@@ -16,6 +17,7 @@
 - Assume label height > 0 (0 = endless tape)
 - Import `gousb` without `//go:build usb` tag
 - Hardcode raster width (varies by model: 90 vs 162)
+- Expose `server.token` in JSON responses
 
 ## Protocol Sequence
 

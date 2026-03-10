@@ -6,7 +6,7 @@
 |---------|---------|
 | `main.go` | Entry point, `//go:embed` frontend, delegates to `cmd.Execute()` |
 | `cmd/` | Cobra CLI: serve, print, printers, labels, fonts, status |
-| `api/` | REST handlers (13 files): print, preview, printers, labels, fonts, config, status, test |
+| `api/` | REST handlers (14 files): print, preview, printers, labels, fonts, config, status, test, sse, middleware |
 | `brotherql/` | Core printer protocol, rasterization, models, platform backends |
 | `internal/services/` | Printer discovery, font management, connection logic |
 | `internal/config/` | Viper-based config (JSON files + env vars) |
@@ -21,6 +21,8 @@
 - **Handler func:** `PrinterHandler = func(backend, model) error` passed to `ConnectToPrinter()`
 - **Embed:** Frontend SPA bundled into binary via `//go:embed all:frontend/dist`
 - **Build tags:** `usb` for gousb (CGO), `!usb` for native (pure Go)
+- **SSE:** `SSEHub` pushes printer status changes to connected clients (5s poll interval)
+- **Auth:** Optional Bearer token middleware via `crypto/subtle.ConstantTimeCompare`
 
 ## Platform Dispatch
 
@@ -42,7 +44,9 @@ main() → cmd.Execute() → root.PersistentPreRun:
   logger.Init → config.Load → selectBackend(auto|usb|native)
   → InitializeDefaultPrinter
 serve subcommand:
-  → setupGinRouter → embed frontend → ListenAndServe(:8000)
+  → setupGinRouter → embed frontend
+  → if TLS: RunTLS(addr, cert, key)
+  → else: ListenAndServe(:8000)
 ```
 
 ## Key Interfaces

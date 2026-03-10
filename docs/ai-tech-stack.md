@@ -19,6 +19,7 @@
 - React 18 + TypeScript + Tailwind CSS
 - Built with Vite into `frontend/dist/`
 - Embedded in binary via `//go:embed`
+- SSE-based real-time printer status via `useSSE` hook
 
 ## Runtime Requirements
 
@@ -26,6 +27,7 @@
 - USB permissions for direct printer access
 - libusb-dev for USB build tag
 - Font files (.ttf/.otf) in configured directories
+- TLS cert/key files for HTTPS mode
 
 ## Supported Hardware
 

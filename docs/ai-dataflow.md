@@ -9,15 +9,26 @@ flowchart TD
     C --> D[Resolve label size + font]
     D --> E[renderTextLabel]
     E --> F[MeasureText + DrawText]
-    F --> G[ConnectToPrinter]
-    G --> H[BrotherQL.Print]
-    H --> I[Reset: invalidate + ESC @]
-    I --> J[Flip image horizontally]
-    J --> K[Build command stream]
-    K --> L[Rasterize: threshold 250]
-    L --> M[Stream rows + compress]
-    M --> N[Print cmd 0x1A]
-    N --> O[RequestStatus]
+    F --> G[rotateForPrinter if rotated]
+    G --> H[ConnectToPrinter]
+    H --> I[BrotherQL.Print]
+    I --> J[Reset: invalidate + ESC @]
+    J --> K[Flip image horizontally]
+    K --> L[Build command stream]
+    L --> M[Rasterize: threshold 250]
+    M --> N[Stream rows + compress]
+    N --> O[Print cmd 0x1A]
+    O --> P[RequestStatus]
+```
+
+## SSE Flow
+
+```mermaid
+flowchart LR
+    A[SSEHub polls 5s] --> B{printers changed?}
+    B -->|yes| C[broadcast to clients]
+    B -->|no| D[skip]
+    E[ForceRefresh] --> C
 ```
 
 ## Key Structures
@@ -25,15 +36,16 @@ flowchart TD
 ```yaml
 PrintRequest:
   Text: string
-  LabelSize: string      # e.g. "62"
+  LabelSize: string         # e.g. "62"
   FontFamily: string
   FontSize: float64
-  Printer: string         # name/UID/"file"
+  Printer: string            # name/UID/"file"
   Model: string
-  Orientation: string     # portrait/landscape
-  Alignment: string       # center/start/end
-  SVGData: string         # optional SVG content
+  Orientation: string        # ""/portrait/landscape/"rotated"
+  Alignment: string          # center/start/end
+  SVGData: string            # optional SVG content
   Scale: float64
+  ContentRotation: float64   # 90/270 for SVG/QR/PNG
 
 PrinterModel:
   RasterWidthBytes: int   # 90 (standard) or 162 (wide)
@@ -48,10 +60,24 @@ LabelSize:
   TapeSizeWidth: int        # mm
   FeedMargin: int           # 35 (endless) or 0 (die-cut)
 
+ServerConfig:
+  Address: string
+  Port: int
+  TLS: bool
+  CertFile: string
+  KeyFile: string
+  Token: string             # Bearer auth (hidden from JSON)
+
 PrinterStatus:              # 32-byte response
   Ready/Busy/Error: bool
   MediaType/Width/Length: int
 ```
+
+## Orientation Model
+
+- Standard: canvas width = printHeadDots, height = tapeLengthDots
+- `"rotated"`: swaps width/height, then `rotateForPrinter()` applies 90° rotation
+- `ContentRotation`: separate 90°/270° rotation for SVG/QR/PNG content
 
 ## Debug Mode
 
