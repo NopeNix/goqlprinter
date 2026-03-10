@@ -73,6 +73,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	fs := isvc.NewFontService(cfg.App.FontDirs)
 	handlers := api.NewHandlers(ps, fs, cfg)
+	sseHub := api.NewSSEHub(ps)
 
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -133,6 +134,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		apiRoutes.POST("/preview", handlers.PreviewLabel)
 		apiRoutes.GET("/fonts", handlers.GetFonts)
 		apiRoutes.POST("/status", handlers.GetStatus)
+		apiRoutes.GET("/events", sseHub.HandleSSE)
 
 		testRoutes := apiRoutes.Group("/test")
 		{

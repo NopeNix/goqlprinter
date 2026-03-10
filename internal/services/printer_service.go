@@ -128,6 +128,38 @@ func (s *PrinterService) ResolvePrinter(identifier string) (FoundPrinter, error)
 	return FoundPrinter{}, fmt.Errorf("printer with name '%s' not found", identifier)
 }
 
+// RefreshDefaultPrinter updates the default printer's URI if the same model
+// reappeared at a different address (common on Linux where /dev/usb/lp* changes).
+// If the default printer's model is no longer found, it clears the default.
+func (s *PrinterService) RefreshDefaultPrinter(currentPrinters []FoundPrinter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.defaultPrinter == nil {
+		// No default set — pick first available if any
+		if len(currentPrinters) > 0 {
+			p := currentPrinters[0]
+			s.defaultPrinter = &p
+			slog.Info("Default printer set to first available", "model", p.Model, "uid", p.UID)
+		}
+		return
+	}
+
+	for _, p := range currentPrinters {
+		if p.Model == s.defaultPrinter.Model {
+			if p.UID != s.defaultPrinter.UID {
+				slog.Info("Default printer URI updated", "model", p.Model, "old", s.defaultPrinter.UID, "new", p.UID)
+			}
+			s.defaultPrinter = &p
+			return
+		}
+	}
+
+	// Model no longer found
+	slog.Warn("Default printer no longer available", "model", s.defaultPrinter.Model)
+	s.defaultPrinter = nil
+}
+
 // GetDefaultPrinter returns the current default printer (thread-safe).
 func (s *PrinterService) GetDefaultPrinter() *FoundPrinter {
 	s.mu.Lock()

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { PrinterStatusKind } from "../components/PrinterStatusBar";
 import { printerApi } from "../api/endpoints";
 import { FILE_PRINTER } from "../constants";
+import { useSSE } from "./useSSE";
 
 // ── Types ──
 
@@ -47,7 +48,6 @@ export interface PrinterStatusState {
 
 const STORAGE_KEY = "selectedPrinter";
 const PRINTER_NAME_KEY = "selectedPrinterName";
-const POLL_INTERVAL = 30_000;
 const REFRESH_DEBOUNCE = 2_000;
 
 // ── Helpers ──
@@ -239,11 +239,49 @@ export function usePrinterStatus(
     };
   }, [refreshPrinters]);
 
-  // Polling
-  useEffect(() => {
-    const interval = setInterval(refreshPrinters, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [refreshPrinters]);
+  // SSE: listen for server-pushed printer list updates
+  const selectedPrinterRef = useRef(selectedPrinter);
+  selectedPrinterRef.current = selectedPrinter;
+
+  useSSE({
+    events: {
+      printers: (data) => {
+        const list = (data as { printers: PrinterInfo[] }).printers || [];
+        setPrinters(list);
+
+        if (!hasInitialized.current && list.length > 0) {
+          hasInitialized.current = true;
+          autoSelectPrinter(list);
+          return;
+        }
+
+        // If selected printer disappeared, mark offline (don't switch to file)
+        const current = selectedPrinterRef.current;
+        if (current && current.id !== "file") {
+          const stillExists = list.some((p) => p.id === current.id);
+          if (!stillExists) {
+            // Printer gone — clear status so resolveStatus returns "offline"
+            setLabelStatus(null);
+            setError(null);
+          }
+        }
+
+        // If currently "offline" (non-file printer not in list), check if it came back
+        // — possibly at a new USB address but same name
+        if (current && current.id !== "file") {
+          const backById = list.find((p) => p.id === current.id);
+          const backByName = !backById
+            ? list.find((p) => p.name === current.name)
+            : null;
+          if (backByName) {
+            // Printer returned at new address
+            onSelectPrinter(backByName);
+            savePrinterToStorage(backByName.id, backByName.name);
+          }
+        }
+      },
+    },
+  });
 
   // ── Resolve status ──
 
