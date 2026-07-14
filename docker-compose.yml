@@ -1,0 +1,63 @@
+name: goqlprinter
+
+# Example docker-compose for nopenix/goqlprinter.
+# Adjust the device path, ports, and volumes to match your setup.
+#
+# Usage:
+#   1. Drop your config.json into ./config/config.json
+#   2. Drop your TLS cert/key into ./certs/   (or set LABELPRINTER_SERVER_TLS=false)
+#   3. Drop any extra fonts into ./fonts/      (the bundled KOMIKAX_.ttf is baked in)
+#   4. docker compose up -d
+
+services:
+  goqlprinter:
+    image: nopenix/goqlprinter:latest
+    container_name: goqlprinter
+    restart: unless-stopped
+
+    # Bind the printer device. Discover it with:  ls /dev/usb/lp*
+    devices:
+      - /dev/usb/lp0:/dev/usb/lp0
+
+    # Optional but recommended: also expose the cgroup/udev info so the
+    # in-container udev lookup matches the host printer.
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # Persist your config / certs / fonts
+      - ./config/config.json:/config/config.json:ro
+      - ./certs:/certs:ro
+      - ./fonts:/fonts:ro
+      # Where debug PNGs land if you POST with "printer": "file"
+      - ./debug_output:/data/debug_output
+
+    environment:
+      # Listen on all interfaces inside the container
+      LABELPRINTER_SERVER_HOST: 0.0.0.0
+      LABELPRINTER_SERVER_PORT: "8000"
+      # Disable TLS if you're fronting this with a reverse proxy
+      LABELPRINTER_SERVER_TLS: "false"
+      # Optional API token — uncomment + change to require Bearer auth
+      # LABELPRINTER_SERVER_TOKEN: changeme-please
+      # Auto-pick the first printer if multiple are connected
+      LABELPRINTER_APP_DEFAULT_PRINTER: "QL-570"
+      # Native backend: talk through the OS driver (works with --device)
+      LABELPRINTER_APP_BACKEND: "native"
+      # Add the extra /fonts dir to the search path
+      LABELPRINTER_APP_FONT_DIRS: "/app/fonts,/fonts"
+
+    # Printer device files are owned by root on most distros, and the
+    # in-container user can't write to them by default. Easiest fix: run
+    # as root. If you want non-root, add a host-side udev rule that
+    # group-owns /dev/usb/lp0 and `group_add` here.
+    user: "0:0"
+
+    # Tighter healthcheck than the image default — exits cleanly if the
+    # API stops responding.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/label-sizes"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

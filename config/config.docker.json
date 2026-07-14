@@ -1,0 +1,15 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "tls": false,
+    "cert_file": "/certs/dev.crt",
+    "key_file": "/certs/dev.key",
+    "token": ""
+  },
+  "app": {
+    "backend": "native",
+    "default_printer": "QL-570",
+    "font_dirs": ["/app/fonts", "/fonts", "/usr/share/fonts"]
+  }
+}

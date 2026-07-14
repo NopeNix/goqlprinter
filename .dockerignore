@@ -1,0 +1,36 @@
+# Build artifacts
+dist/
+build_deps/
+*.exe
+goqlprinter
+goqlinter
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.serena/
+frontend/.claude/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Tooling caches
+.claude/
+.playwright-cli/
+*.log
+debug_output/
+backend_go/
+
+# CI
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+.docker/

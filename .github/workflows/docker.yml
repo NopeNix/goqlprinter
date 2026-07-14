@@ -1,0 +1,115 @@
+name: docker
+
+# Build and publish multi-arch container images to Docker Hub.
+#
+# Required GitHub repository secrets (Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME  — your Docker Hub username
+#   DOCKERHUB_TOKEN     — a Docker Hub access token (NOT your password)
+#                          https://app.docker.com/settings → Security → New access token
+#
+# Optional:
+#   DOCKERHUB_NAMESPACE — override the Docker Hub org/namespace (defaults to DOCKERHUB_USERNAME)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Stop a previous run on the same ref when a new commit lands
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.event.repository.name }}
+  NAMESPACE: ${{ secrets.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  build:
+    name: build & push (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+
+    # Don't push on PRs — only on main, tags, and manual runs
+    if: github.event_name != 'pull_request'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+            # QEMU + buildx cross-compile handles this; no native runner needed
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for `git describe` to produce a real version tag
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # default tags for any push
+            type=raw,value={{sha}},enable={{is_default_branch}}
+            # tag once on the default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # semantic-version tags on git tags (v1.2.3 → 1.2.3, 1.2, 1)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=goqlprinter
+            org.opencontainers.image.description=Web UI and REST API for Brother QL label printers
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform.os }}/${{ matrix.platform.arch }}
+          push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name != 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Bake the resolved version + build timestamp into the binary
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            TARGETOS=${{ matrix.platform.os }}
+            TARGETARCH=${{ matrix.platform.arch }}
+          # GHA cache — re-uses layers between runs (huge speedup)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Generate SBOM + provenance for supply-chain visibility
+          provenance: true
+          sbom: true
