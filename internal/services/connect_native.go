@@ -25,7 +25,10 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 		return err
 	}
 
-	// Convert FoundPrinter -> PrinterInfo
+	// Convert FoundPrinter -> PrinterInfo. Infer the backend type from
+	// the URI scheme so a network URI uses the network backend, a
+	// /dev/ path uses the native backend, and an usb: URI looks up
+	// the actual discovered device.
 	printerInfo := brotherql.PrinterInfo{
 		Name:    resolvedPrinter.Model,
 		Model:   resolvedPrinter.Model,
@@ -33,13 +36,17 @@ func ConnectToPrinter(svc *PrinterService, printerIdentifier, modelOverride stri
 		Backend: brotherql.BackendNative,
 	}
 
-	// If UID is usb:-formatted, try via native backend
-	if strings.HasPrefix(resolvedPrinter.UID, "usb:") {
+	switch {
+	case strings.HasPrefix(resolvedPrinter.UID, "tcp://"),
+		strings.HasPrefix(resolvedPrinter.UID, "network://"):
+		printerInfo.Backend = brotherql.BackendNetwork
+	case strings.HasPrefix(resolvedPrinter.UID, "usb:"):
+		// usb: URIs need to be re-resolved against actual discovery
+		// because bus/address can change between scans.
 		printers, err := svc.provider.FindPrinters()
 		if err != nil {
 			return fmt.Errorf("failed to find printers: %w", err)
 		}
-
 		found := false
 		for _, p := range printers {
 			if p.Model == resolvedPrinter.Model {

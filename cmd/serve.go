@@ -65,7 +65,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		"default_printer", cfg.App.DefaultPrinter,
 		"font_dirs", cfg.App.FontDirs)
 
-	BackendProvider = InitBackendProvider(cfg)
+	provider, err := InitBackendProvider(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize backend: %w", err)
+	}
+	BackendProvider = provider
 
 	ps := isvc.NewPrinterService(BackendProvider)
 	ps.InitializeDefaultPrinter(cfg.App.DefaultPrinter)

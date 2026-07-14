@@ -35,8 +35,9 @@ type PrinterStatus struct {
 type BackendType string
 
 const (
-	BackendUSB    BackendType = "usb"    // gousb/libusb (CGO)
-	BackendNative BackendType = "native" // OS native (Pure Go)
+	BackendUSB     BackendType = "usb"     // gousb/libusb (CGO)
+	BackendNative  BackendType = "native"  // OS native (Pure Go)
+	BackendNetwork BackendType = "network" // raw TCP socket on port 9100 (Pure Go)
 )
 
 // PrinterInfo contains discovered printer information

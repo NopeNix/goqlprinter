@@ -42,7 +42,11 @@ var rootCmd = &cobra.Command{
 		}
 		Cfg = cfg
 
-		BackendProvider = InitBackendProvider(cfg)
+		provider, err := InitBackendProvider(cfg)
+		if err != nil {
+			return err
+		}
+		BackendProvider = provider
 		return nil
 	},
 }

@@ -30,6 +30,13 @@ type AppConfig struct {
 	Backend        string   `mapstructure:"backend"`
 	DefaultPrinter string   `mapstructure:"default_printer"`
 	FontDirs       []string `mapstructure:"font_dirs"`
+
+	// NetworkURI is required when Backend == "network". Format:
+	//   tcp://192.168.1.21:9100
+	//   tcp://192.168.1.21            (port defaults to 9100)
+	//   network://192.168.1.21:9100
+	//   192.168.1.21:9100             (bare host:port)
+	NetworkURI string `mapstructure:"network_uri"`
 }
 
 // getDefaultFontDirs returns OS-appropriate font directories
@@ -51,6 +58,7 @@ func getDefaultFontDirs() []string {
 		return []string{
 			"./fonts",
 			"/usr/share/fonts/truetype",
+			"/usr/share/fonts",
 			"/usr/local/share/fonts",
 			"~/.local/share/fonts",
 			"~/.fonts",
@@ -78,6 +86,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("app.font_dirs", getDefaultFontDirs())
 	v.SetDefault("app.default_printer", "")
 	v.SetDefault("app.backend", "auto")
+	v.SetDefault("app.network_uri", "")
 	v.SetDefault("server.tls", false)
 	v.SetDefault("server.cert_file", "")
 	v.SetDefault("server.key_file", "")
@@ -127,6 +136,9 @@ func logConfigSources(v *viper.Viper, cfg *Config) {
 	}
 	logConfigValue(v, "app.backend", cfg.App.Backend)
 	logConfigValue(v, "app.default_printer", cfg.App.DefaultPrinter)
+	if cfg.App.NetworkURI != "" {
+		logConfigValue(v, "app.network_uri", cfg.App.NetworkURI)
+	}
 	slog.Info("Configuration value", "key", "app.font_dirs", "value", cfg.App.FontDirs)
 }
 
