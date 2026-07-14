@@ -78,7 +78,7 @@ RUN go build \
 # ─── Stage 3: minimal runtime ───────────────────────────────────────────────
 # Alpine: small, has ca-certs for HTTPS to printers / Let's Encrypt,
 # and the entrypoint shell makes USB device mapping easy to debug.
-FROM alpine:3.20
+FROM alpine:3.24
 
 # tini for proper signal handling, ca-certs for TLS to upstream services,
 # curl for the docker-healthcheck, shadow for `adduser`.
