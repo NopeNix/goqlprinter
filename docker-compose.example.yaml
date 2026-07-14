@@ -1,0 +1,117 @@
+name: goqlprinter
+
+# ─────────────────────────────────────────────────────────────────────────
+# goqlprinter — fully documented docker-compose example
+#
+# HOW TO USE:
+#   1.  Copy this file:
+#         cp docker-compose.example.yaml docker-compose.yaml
+#   2.  Edit the values marked with `<...>` to match your setup.
+#   3.  Drop your printer config / certs / fonts into the bind-mounted
+#       directories (or rely on the image defaults — TLS off, host
+#       0.0.0.0, no token).
+#   4.  Start it:
+#         docker compose up -d
+#   5.  Open the UI:
+#         http://localhost:8000
+#
+# FOR TLS (HTTPS):
+#   • Mount your cert + key into /certs (the dev cert baked into the
+#     image is a self-signed snakeoil cert, replace it).
+#   • Set LABELPRINTER_SERVER_TLS=true.
+#   • Optionally set LABELPRINTER_SERVER_TOKEN to require Bearer auth
+#     on all /api/* routes.
+#
+# FOR NON-ROOT USB ACCESS (instead of `user: "0:0"`):
+#   • Add a host-side udev rule:
+#         /etc/udev/rules.d/50-brother-ql.rules
+#         SUBSYSTEM=="usb", ATTR{idVendor}=="04f9", MODE="0666", GROUP="goql"
+#     then `sudo udevadm control --reload-rules && sudo udevadm trigger`
+#   • Drop the `user:` line and add:
+#         group_add: ["goql"]
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  goqlprinter:
+    # ── Image ────────────────────────────────────────────────────────────
+    # Pulled from Docker Hub. Pinned tags available: :latest, :vX.Y.Z,
+    # :vX.Y, :vX, :<sha>.
+    #
+    # If you want to build from source instead of pulling, comment out
+    # `image:` and uncomment the `build:` block below.
+    image: nopenix/goqlprinter:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: goqlprinter
+    restart: unless-stopped
+
+    # ── USB device ──────────────────────────────────────────────────────
+    # Find yours with:  ls /dev/usb/lp*
+    # Add multiple lines if you have more than one printer.
+    devices:
+      - /dev/usb/lp0:/dev/usb/lp0
+
+    # ── Ports ───────────────────────────────────────────────────────────
+    # Map host:container. Change the host side if 8000 is already in use.
+    ports:
+      - "8000:8000"
+
+    # ── Volumes ────────────────────────────────────────────────────────
+    # All four mounts are optional — the image ships with sensible
+    # defaults for everything except TLS certs.
+    volumes:
+      # Your printer config overrides the in-image default
+      - ./config/config.json:/config/config.json:ro
+      # Your TLS cert + key (overrides the dev self-signed one)
+      - ./certs:/certs:ro
+      # Extra fonts (the bundled KOMIKAX_.ttf is already at /app/fonts)
+      - ./fonts:/fonts:ro
+      # Where `printer: "file"` debug PNGs land
+      - ./debug_output:/data/debug_output
+
+    # ── Environment ────────────────────────────────────────────────────
+    # All `LABELPRINTER_*` envs override values from the mounted config.json.
+    # Anything not set falls back to the image defaults baked in at build time.
+    environment:
+      # Network
+      LABELPRINTER_SERVER_HOST: 0.0.0.0
+      LABELPRINTER_SERVER_PORT: "8000"
+      LABELPRINTER_SERVER_TLS: "false"
+      # Bearer auth — uncomment to require Authorization: Bearer <token>
+      # on all /api/* routes. Pick something long + random.
+      # LABELPRINTER_SERVER_TOKEN: "<long-random-string-here>"
+
+      # Printer behavior
+      LABELPRINTER_APP_DEFAULT_PRINTER: "QL-570"
+      # `auto` tries USB first, falls back to native.
+      # `native` = OS driver (/dev/usb/lp* on Linux). `usb` = libusb.
+      LABELPRINTER_APP_BACKEND: "native"   # or "network" for WiFi/Ethernet QL printers
+      LABELPRINTER_APP_FONT_DIRS: "/app/fonts,/fonts"
+      # Required only when LABELPRINTER_APP_BACKEND=network:
+      # LABELPRINTER_APP_NETWORK_URI: "tcp://192.168.1.42:9100"
+      # LABELPRINTER_APP_DEFAULT_PRINTER: "QL-810W"
+
+    # ── User / permissions ─────────────────────────────────────────────
+    # The in-image user is `goql` (uid 1000). The default below flips
+    # to root so the container can open /dev/usb/lp* without udev work.
+    # Remove this line + add a host-side udev rule for non-root.
+    user: "0:0"
+
+    # ── Healthcheck ────────────────────────────────────────────────────
+    # Hits an unauthenticated endpoint, so it works whether or not you've
+    # set a Bearer token.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/label-sizes"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # ── Logging ────────────────────────────────────────────────────────
+    # Cap log files at 10 MB × 3 rotations.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

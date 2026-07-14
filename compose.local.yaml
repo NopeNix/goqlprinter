@@ -1,0 +1,49 @@
+name: goqlprinter
+
+# Local development / smoke-test override.
+# Builds from the local Dockerfile (no Docker Hub push required) and
+# uses a local :dev tag, then runs the same setup as docker-compose.yml.
+#
+# Usage:
+#   docker compose -f compose.local.yaml up -d
+#   docker compose -f compose.local.yaml logs -f
+#   docker compose -f compose.local.yaml down
+
+services:
+  goqlprinter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nopenix/goqlprinter:dev
+    container_name: goqlprinter
+    restart: unless-stopped
+
+    devices:
+      - /dev/usb/lp0:/dev/usb/lp0
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./config/config.json:/config/config.json:ro
+      - ./certs:/certs:ro
+      - ./fonts:/fonts:ro
+      - ./debug_output:/data/debug_output
+
+    environment:
+      LABELPRINTER_SERVER_HOST: 0.0.0.0
+      LABELPRINTER_SERVER_PORT: "8000"
+      LABELPRINTER_SERVER_TLS: "false"
+      # LABELPRINTER_SERVER_TOKEN: changeme-please
+      LABELPRINTER_APP_DEFAULT_PRINTER: "QL-570"
+      LABELPRINTER_APP_BACKEND: "native"
+      LABELPRINTER_APP_FONT_DIRS: "/app/fonts,/fonts"
+
+    user: "0:0"
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/label-sizes"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
